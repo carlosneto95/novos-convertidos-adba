@@ -1,0 +1,88 @@
+/* ==========================================================================
+   custom.css - AJUSTES FINOS que o Tailwind nao cobre.
+   Mantemos este arquivo PEQUENO: 95% do visual vem das classes do Tailwind
+   escritas direto no HTML.
+   ========================================================================== */
+
+/* Rolagem suave ao clicar em links internos (ex: faixa roxa -> lista). */
+html { scroll-behavior: smooth; }
+
+/* Barra de rolagem discreta, estilo CRM moderno (secao 6). */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; background-clip: content-box; }
+
+/* Contorno visivel ao navegar pelo teclado (Tab): acessibilidade. */
+:focus-visible { outline: 2px solid #0f4c5c; outline-offset: 2px; border-radius: 4px; }
+
+/* Respeita quem configurou o sistema para reduzir animacoes. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ==========================================================================
+   BOLINHA DOS CARTOES DE ESCOLHA (radio)
+
+   POR QUE ISTO NAO ESTA NO TAILWIND?
+   O "peer-checked:" do Tailwind vira o seletor CSS "input:checked ~ elemento",
+   e o "~" so alcanca IRMAOS. A bolinha fica DENTRO do rotulo, entao ela e
+   "sobrinha" do input, nao irma - o Tailwind nao chega nela.
+
+   O seletor abaixo usa espaco (descendente), que alcanca qualquer nivel.
+   ========================================================================== */
+
+/* Marcado: a borda da bolinha fica azul-marca */
+input.peer:checked ~ label .ponto-radio {
+  border-color: #0f4c5c;
+}
+
+/* Marcado: o miolo da bolinha aparece */
+input.peer:checked ~ label .ponto-radio > span {
+  opacity: 1;
+}
+
+/* Navegacao por teclado: contorno visivel no cartao inteiro */
+input.peer:focus-visible ~ label {
+  outline: 2px solid #0f4c5c;
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   ANIMACAO DOS BLOCOS DO FORMULARIO
+
+   POR QUE NAO USAR O x-transition DO ALPINE?
+   As transicoes do Alpine dependem do requestAnimationFrame - o "relogio de
+   desenho" do navegador. Quando o navegador economiza recursos (aba em
+   segundo plano, celular com bateria fraca, computador ocupado), esse relogio
+   PARA. Resultado: o bloco fica congelado semitransparente e a pessoa nao
+   consegue preencher o formulario.
+
+   Uma animacao de CSS nao tem esse risco: ela dispara sozinha quando o
+   elemento sai de "display: none" e o navegador a executa ate o fim.
+   ========================================================================== */
+
+@keyframes aparecer-de-baixo {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes aparecer {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Cada um dos 4 blocos, ao entrar */
+.bloco-anima {
+  animation: aparecer-de-baixo 0.3s ease-out;
+}
+
+/* Campos que surgem dentro de um bloco (responsavel legal, "qual igreja?") */
+.reveal-anima {
+  animation: aparecer 0.25s ease-out;
+}
+
+/* Quem pediu menos animacao no sistema operacional nao recebe nenhuma */
+@media (prefers-reduced-motion: reduce) {
+  .bloco-anima, .reveal-anima { animation: none; }
+}

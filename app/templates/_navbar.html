@@ -1,0 +1,248 @@
+{# ===========================================================================
+   _navbar.html - A BARRA DE NAVEGACAO (secao 5).
+
+   Os links mudam conforme o papel de quem esta logado:
+     Admin       -> Painel · Novo Convertido · Responsáveis · Eventos · Relatórios
+     Responsável -> Painel · Eventos
+
+   COMPACTA DE PROPOSITO: 48px de altura (antes eram 64). Cada pixel gasto
+   aqui e um pixel a menos de conteúdo no painel, que precisa caber numa
+   ONE PAGE (secao 5.2).
+
+   ATENCAO - ISTO NAO E SEGURANCA.
+   Esconder um link apenas evita que a pessoa CLIQUE nele. Quem souber a URL
+   digita direto na barra de endereco. A trava de verdade e o decorador
+   @admin_necessario em app/seguranca.py, que roda no servidor ANTES da tela.
+=========================================================================== #}
+{% import "_icones.html" as ic %}
+
+{# A lista dos itens do menu, em um lugar so.
+   Cada item: (rota, texto, icone, quem pode ver)
+
+   O "Novo Convertido" NAO esta nesta lista de proposito - ele e diferente
+   dos outros e fica separado, no fim da barra. Veja a explicacao abaixo. #}
+{% set itens = [
+  ('painel.index',       'Painel',        'painel',       true),
+  ('responsaveis.index', 'Responsáveis',  'responsaveis', current_user.eh_admin),
+  ('eventos.index',      'Eventos',       'eventos',      true),
+  ('relatorios.index',   'Relatórios',    'relatorios',   current_user.eh_admin)
+] %}
+
+{# Macro que monta o endereco certo de cada item #}
+{% macro destino(rota) -%}
+  {%- if rota.startswith('#') -%}{{ rota }}
+  {%- else -%}{{ url_for(rota) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{# ===========================================================================
+   O BOTAO "NOVO CONVERTIDO" - por que e diferente de todos os outros
+
+   Ele leva para o formulario PUBLICO, que e outro mundo: nao tem barra de
+   navegacao, nao tem menu, nao tem nada. E de proposito (secao 5.1) - quem
+   preenche pode ser qualquer membro da igreja, e nao pode enxergar o sistema
+   interno.
+
+   O PROBLEMA QUE ISSO CRIAVA:
+   Clicando no menu, a pessoa era jogada no formulario e ficava PRESA - sem
+   botao de voltar, sem menu, sem saida a nao ser a seta do navegador.
+
+   A SOLUCAO (duas partes):
+     1. abre em uma ABA NOVA (target="_blank"), entao o painel continua
+        aberto atras, intacto
+     2. fica no FIM da barra, separado por um risco, porque nao e "mais uma
+        secao do sistema" - e uma saida para fora dele
+
+   rel="noopener noreferrer" nao e enfeite: sem isso, a pagina aberta ganha
+   uma referencia de volta (window.opener) que poderia mexer na aba original.
+=========================================================================== #}
+{% macro botao_novo_convertido(classe, mostrar_texto=True) %}
+  <a href="{{ url_for('publico.cadastro', token=config.CADASTRO_TOKEN) }}"
+     target="_blank" rel="noopener noreferrer"
+     class="{{ classe }}"
+     title="Abre o formulário público em uma aba nova">
+    {{ ic.icone('novo-convertido', 'w-4 h-4') }}
+    {% if mostrar_texto %}Novo Convertido{% endif %}
+    {# A setinha diagonal avisa, antes do clique, que abre em outra aba. #}
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+         stroke-width="2" stroke="currentColor" class="h-3 w-3 shrink-0 opacity-70">
+      <path stroke-linecap="round" stroke-linejoin="round"
+            d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+    </svg>
+  </a>
+{% endmacro %}
+
+<header class="sticky top-0 z-40 bg-marca text-white shadow-sm"
+        x-data="{ menuAberto: false, usuarioAberto: false }">
+
+  {# Fio vermelho no topo: e aqui que o vermelho da chama entra na interface.
+     Fino de proposito - o vermelho "forte" fica reservado para o semaforo. #}
+  <div class="h-0.5 w-full bg-chama"></div>
+
+  <nav class="mx-auto flex h-12 max-w-7xl items-center gap-3 px-3 sm:px-4">
+
+    {# ================================================================
+       MARCA
+    ================================================================ #}
+    <a href="{{ url_for('painel.index') }}" class="flex shrink-0 items-center">
+      {# A versao "branco" do logo: as letras cinzas do arquivo original
+         sumiriam neste fundo escuro, entao foram pintadas de branco.
+         A chama continua vermelha - e ela que da identidade. #}
+      <img src="{{ url_for('static', filename='img/logo-adba-branco.png') }}"
+           alt="{{ config.IGREJA_NOME }}"
+           class="h-8 w-auto">
+    </a>
+
+    {# ================================================================
+       LINKS (computador)
+       "hidden lg:flex" = escondido ate telas grandes.
+       py-1.5 em vez de py-2, text-[13px] em vez de text-sm: economiza
+       altura sem apertar o clique (o alvo continua com 32px).
+    ================================================================ #}
+    <div class="hidden flex-1 items-center gap-0.5 lg:flex">
+      {% for rota, texto, icone_nome, visivel in itens %}
+        {% if visivel %}
+          {% set atual = (request.endpoint == rota) %}
+          <a href="{{ destino(rota) }}"
+             class="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition
+                    {% if atual %}bg-white/15 text-white{% else %}text-white/70 hover:bg-white/10 hover:text-white{% endif %}">
+            {{ ic.icone(icone_nome, 'w-4 h-4') }}
+            {{ texto }}
+          </a>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    {# ================================================================
+       NOVO CONVERTIDO (computador) - o ultimo da barra, separado
+       Fica aqui, e nao na lista acima, porque nao e "mais uma secao do
+       sistema": e uma porta para FORA dele, que abre em aba nova.
+    ================================================================ #}
+    {% if current_user.eh_admin %}
+      <div class="ml-auto hidden items-center gap-3 lg:flex">
+        {# O risco vertical separa visualmente o que e "dentro" do sistema
+           daquilo que sai dele. #}
+        <span class="h-5 w-px bg-white/20"></span>
+
+        {{ botao_novo_convertido(
+             "flex items-center gap-1.5 rounded-md bg-chama px-2.5 py-1.5 text-[13px] font-semibold text-white transition hover:bg-chama-claro") }}
+      </div>
+    {% endif %}
+
+    {# ================================================================
+       USUARIO LOGADO (computador)
+    ================================================================ #}
+    <div class="relative hidden lg:block {% if not current_user.eh_admin %}ml-auto{% endif %}">
+      <button type="button"
+              @click="usuarioAberto = !usuarioAberto"
+              @click.outside="usuarioAberto = false"
+              class="flex items-center gap-2 rounded-md px-1.5 py-1 transition hover:bg-white/10">
+        <span class="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-xs font-bold">
+          {{ current_user.nome[:1]|upper }}
+        </span>
+        <span class="text-[13px] font-medium">{{ current_user.primeiro_nome }}</span>
+      </button>
+
+      {# Menuzinho que abre ao clicar no nome #}
+      <div x-show="usuarioAberto" x-cloak
+           class="absolute right-0 top-10 w-52 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-slate-700 shadow-lg">
+        <div class="border-b border-slate-100 px-3 py-2">
+          <p class="text-[13px] font-semibold text-slate-900">{{ current_user.nome }}</p>
+          <p class="text-[11px] text-slate-500">
+            {{ current_user.login }} &middot; {{ current_user.papel_rotulo }}
+          </p>
+        </div>
+
+        <a href="{{ url_for('auth.trocar_senha') }}"
+           class="flex items-center gap-2 px-3 py-2 text-[13px] transition hover:bg-slate-50">
+          {{ ic.icone('chave', 'w-4 h-4 text-slate-400') }} Trocar senha
+        </a>
+
+        {# Duplicados e Auditoria ficam AQUI, no menu do usuario, e nao na
+           barra principal. Sao ferramentas de manutencao que o Admin usa de
+           vez em quando - na barra, competiriam com o trabalho do dia a dia. #}
+        {% if current_user.eh_admin %}
+          <a href="{{ url_for('admin.duplicatas') }}"
+             class="flex items-center gap-2 border-t border-slate-100 px-3 py-2 text-[13px] transition hover:bg-slate-50">
+            {{ ic.icone('responsaveis', 'w-4 h-4 text-slate-400') }} Duplicados
+          </a>
+          <a href="{{ url_for('admin.registro_auditoria') }}"
+             class="flex items-center gap-2 px-3 py-2 text-[13px] transition hover:bg-slate-50">
+            {{ ic.icone('relogio', 'w-4 h-4 text-slate-400') }} Auditoria
+          </a>
+        {% endif %}
+
+        {# O logout e POST + token CSRF: um site de fora nao consegue
+           deslogar a pessoa sem que ela clique aqui. #}
+        <form method="POST" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"
+                  class="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-red-600 transition hover:bg-red-50">
+            {{ ic.icone('sair', 'w-4 h-4') }} Sair
+          </button>
+        </form>
+      </div>
+    </div>
+
+    {# ================================================================
+       BOTAO DO MENU (celular e tablet)
+    ================================================================ #}
+    <button type="button" @click="menuAberto = !menuAberto"
+            class="ml-auto rounded-md p-1.5 transition hover:bg-white/10 lg:hidden"
+            aria-label="Abrir menu">
+      <span x-show="!menuAberto">{{ ic.icone('menu', 'w-5 h-5') }}</span>
+      <span x-show="menuAberto" x-cloak>{{ ic.icone('x', 'w-5 h-5') }}</span>
+    </button>
+  </nav>
+
+  {# ================================================================
+     MENU ABERTO (celular e tablet)
+     Aqui os alvos sao MAIORES (py-2.5), porque sao tocados com o dedo.
+     Compactar faz sentido no computador, nao no celular.
+  ================================================================ #}
+  <div x-show="menuAberto" x-cloak
+       class="border-t border-white/10 bg-marca px-3 py-2 shadow-lg lg:hidden">
+
+    <div class="mb-2 flex items-center gap-2 border-b border-white/10 pb-2">
+      <span class="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-sm font-bold">
+        {{ current_user.nome[:1]|upper }}
+      </span>
+      <div class="leading-tight">
+        <p class="text-[13px] font-semibold">{{ current_user.nome }}</p>
+        <p class="text-[11px] text-white/60">{{ current_user.papel_rotulo }}</p>
+      </div>
+    </div>
+
+    {# No celular o "Novo Convertido" tambem fica por ULTIMO, depois de um
+       risco - pelo mesmo motivo: e uma saida do sistema, nao uma secao dele. #}
+    {% for rota, texto, icone_nome, visivel in itens %}
+      {% if visivel %}
+        <a href="{{ destino(rota) }}"
+           class="flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white">
+          {{ ic.icone(icone_nome, 'w-4 h-4') }} {{ texto }}
+        </a>
+      {% endif %}
+    {% endfor %}
+
+    <a href="{{ url_for('auth.trocar_senha') }}"
+       class="flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10">
+      {{ ic.icone('chave', 'w-4 h-4') }} Trocar senha
+    </a>
+
+    {# --- NOVO CONVERTIDO: o ultimo, separado, abrindo em aba nova --- #}
+    {% if current_user.eh_admin %}
+      <div class="mt-1 border-t border-white/10 pt-1">
+        {{ botao_novo_convertido(
+             "flex items-center gap-2.5 rounded-md bg-chama px-2.5 py-2.5 text-sm font-semibold text-white transition hover:bg-chama-claro") }}
+      </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('auth.logout') }}" class="mt-1 border-t border-white/10 pt-1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit"
+              class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-left text-sm font-medium text-red-300 transition hover:bg-white/10">
+        {{ ic.icone('sair', 'w-4 h-4') }} Sair
+      </button>
+    </form>
+  </div>
+</header>

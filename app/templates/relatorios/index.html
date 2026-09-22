@@ -1,0 +1,492 @@
+{# ===========================================================================
+   relatorios/index.html - OS RELATORIOS (secao 5.6). SO ADMIN.
+
+   SOBRE AS CORES DOS GRAFICOS - a regra que seguimos:
+
+   Cada cor tem UM trabalho, e nunca dois:
+     - AZUL sozinho   = quantidade (quanto maior a barra, maior o numero)
+     - 3 cores fixas  = identidade (qual departamento e qual)
+     - semaforo       = estado (verde/amarelo/vermelho SO significam o
+                        semaforo, em lugar nenhum mais)
+
+   Por isso os graficos de barra sao todos azuis: barra colorida por "enfeite"
+   faz o leitor procurar um significado que nao existe.
+
+   A paleta das 3 fatias da rosca foi CONFERIDA por um validador de
+   daltonismo - nao escolhida a olho. Mesmo assim cada fatia leva rotulo
+   escrito, para a cor nunca ser a unica informacao.
+=========================================================================== #}
+{% extends "base.html" %}
+{% import "_icones.html" as ic %}
+
+{% block titulo %}Relatórios{% endblock %}
+
+{% block head_extra %}
+  {# Chart.js via CDN - sem build, sem npm (secao 2) #}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    /* As cores dos graficos vivem aqui, como variaveis, para trocar num
+       lugar so. Os nomes dizem o PAPEL, nao a cor. */
+    .viz {
+      --serie:        #2a78d6;   /* o azul unico das quantidades */
+      --serie-fraca:  #cde2fb;   /* o mesmo azul, bem claro */
+      --ident-1:      #2a78d6;   /* identidade: fatia 1 */
+      --ident-2:      #eb6834;   /* identidade: fatia 2 */
+      --ident-3:      #1baf7a;   /* identidade: fatia 3 */
+      --grade:        #e2e8f0;   /* linhas de fundo, bem discretas */
+      --tinta-fraca:  #94a3b8;   /* numeros dos eixos */
+    }
+  </style>
+{% endblock %}
+
+{% block conteudo %}
+<div class="viz mx-auto max-w-7xl px-3 py-4 sm:px-4">
+
+  {# =====================================================================
+     CABECALHO
+  ===================================================================== #}
+  <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <div>
+      <h1 class="text-lg font-bold tracking-tight text-slate-900">Relatórios</h1>
+      <p class="text-[12px] text-slate-500">
+        {{ d.resumo.total }} almas cadastradas &middot; {{ d.resumo.contatos }} contatos registrados
+      </p>
+    </div>
+
+    {# O botao de exportar. A rota e exclusiva do Admin e registra a
+       exportacao na auditoria (secao 7, item 12). #}
+    <a href="{{ url_for('relatorios.exportar_excel') }}"
+       class="flex items-center gap-1.5 rounded-lg bg-marca px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-marca-claro">
+      {{ ic.icone('excel', 'w-4 h-4') }} Exportar Excel
+    </a>
+  </div>
+
+  {# =====================================================================
+     OS NUMEROS GRANDES
+
+     A TAXA DE RETENCAO nao virou grafico de proposito: e um numero so, e
+     numero solitario se le melhor grande, na tela, do que virando uma barra
+     sozinha. E, na pratica, e o numero mais honesto do sistema - contato por
+     telefone qualquer um registra; presenca no culto e a prova de que a
+     pessoa esta voltando.
+  ===================================================================== #}
+  <div class="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+
+    {# --- O destaque: retencao --- #}
+    <div class="rounded-lg border-2 border-marca/20 bg-white p-4 sm:col-span-2 lg:col-span-1">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        Taxa de retenção
+      </p>
+      {% if d.retencao.percentual is not none %}
+        <p class="mt-1 text-4xl font-bold leading-none text-marca">
+          {{ d.retencao.percentual }}<span class="text-2xl">%</span>
+        </p>
+        <p class="mt-1.5 text-[12px] leading-snug text-slate-500">
+          {{ d.retencao.presentes }} de {{ d.retencao.total }} almas em
+          acompanhamento estiveram em algum culto nos últimos
+          {{ d.retencao.dias }} dias.
+        </p>
+      {% else %}
+        <p class="mt-1 text-4xl font-bold leading-none text-slate-300">—</p>
+        <p class="mt-1.5 text-[12px] text-slate-500">
+          Nenhuma alma em acompanhamento ainda.
+        </p>
+      {% endif %}
+    </div>
+
+    {% set numeros = [
+      ('Total de almas',    d.resumo.total,             'pessoa'),
+      ('Em acompanhamento', d.resumo.em_acompanhamento, 'acompanhamento'),
+      ('Integradas',        d.resumo.integradas,        'integrada')
+    ] %}
+    {% for rotulo, valor, icone_nome in numeros %}
+      <div class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+          {{ ic.icone(icone_nome, 'w-4 h-4') }}
+        </span>
+        <div>
+          <p class="text-2xl font-bold leading-none text-slate-900">{{ valor }}</p>
+          <p class="mt-0.5 text-[11px] text-slate-500">{{ rotulo }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  {# =====================================================================
+     OS GRAFICOS
+  ===================================================================== #}
+  <div class="grid gap-3 lg:grid-cols-2">
+
+    {# --- 1. CONVERSOES POR MES (linha) ------------------------------- #}
+    <section class="rounded-lg border border-slate-200 bg-white p-4 lg:col-span-2">
+      <h2 class="text-[13px] font-bold text-slate-800">Conversões por mês</h2>
+      <p class="mt-0.5 text-[11px] text-slate-500">
+        Últimos 12 meses &middot; {{ d.por_mes.total }} no período.
+        Meses sem nenhuma conversão aparecem como zero — pular esses meses
+        faria a linha mentir.
+      </p>
+      <div class="mt-3 h-56">
+        <canvas id="grafico-mes"></canvas>
+      </div>
+    </section>
+
+    {# --- 2. CONVERSOES POR TRABALHO (barras) ------------------------- #}
+    <section class="rounded-lg border border-slate-200 bg-white p-4">
+      <h2 class="text-[13px] font-bold text-slate-800">Onde as pessoas aceitam Jesus</h2>
+      <p class="mt-0.5 text-[11px] text-slate-500">
+        Por trabalho da igreja. É o relatório que mais muda decisão: mostra
+        onde vale a pena investir.
+      </p>
+      <div class="mt-3" style="height: {{ 28 * (d.por_trabalho.rotulos|length) + 30 }}px">
+        <canvas id="grafico-trabalho"></canvas>
+      </div>
+    </section>
+
+    {# --- 3. DEPARTAMENTO (rosca) ------------------------------------- #}
+    <section class="rounded-lg border border-slate-200 bg-white p-4">
+      <h2 class="text-[13px] font-bold text-slate-800">Distribuição por departamento</h2>
+      <p class="mt-0.5 text-[11px] text-slate-500">
+        Quem está acolhendo quantas almas.
+      </p>
+
+      <div class="mt-3 flex flex-col items-center gap-4 sm:flex-row">
+        <div class="h-44 w-44 shrink-0">
+          <canvas id="grafico-departamento"></canvas>
+        </div>
+
+        {# A legenda e escrita a mao, com o NUMERO e o PERCENTUAL ao lado de
+           cada cor. Assim a cor nunca e a unica informacao - quem nao
+           distingue as cores le os numeros e entende igual. #}
+        <ul class="w-full space-y-1.5">
+          {% for rotulo in d.por_departamento.rotulos %}
+            <li class="flex items-center gap-2 text-[12px]">
+              <span class="h-2.5 w-2.5 shrink-0 rounded-sm"
+                    style="background: var(--ident-{{ loop.index }})"></span>
+              <span class="flex-1 text-slate-700">{{ rotulo }}</span>
+              <span class="font-semibold tabular-nums text-slate-900">
+                {{ d.por_departamento.valores[loop.index0] }}
+              </span>
+              <span class="w-9 text-right tabular-nums text-slate-400">
+                {{ d.por_departamento.percentuais[loop.index0] }}%
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+
+    {# --- 4. FUNIL DO CICLO DE VIDA ----------------------------------- #}
+    <section class="rounded-lg border border-slate-200 bg-white p-4">
+      <h2 class="text-[13px] font-bold text-slate-800">Funil do ciclo de vida</h2>
+      <p class="mt-0.5 text-[11px] text-slate-500">
+        Na ordem da jornada — de quem acabou de chegar até quem se firmou
+        ou se perdeu. Não é um ranking.
+      </p>
+      <div class="mt-3" style="height: {{ 28 * (d.funil.rotulos|length) + 30 }}px">
+        <canvas id="grafico-funil"></canvas>
+      </div>
+    </section>
+
+    {# --- 5. RANKING DE RESPONSAVEIS ---------------------------------- #}
+    <section class="rounded-lg border border-slate-200 bg-white p-4">
+      <h2 class="text-[13px] font-bold text-slate-800">Ranking de responsáveis</h2>
+      <p class="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+        Porcentagem das almas de cada um que está no verde.
+        <strong>Leia junto com a quantidade:</strong> quem tem 2 almas chega
+        fácil a 100%; quem tem 30 dificilmente passa de 70%.
+      </p>
+
+      {% if d.ranking.rotulos %}
+        <div class="mt-3" style="height: {{ 30 * (d.ranking.rotulos|length) + 30 }}px">
+          <canvas id="grafico-ranking"></canvas>
+        </div>
+      {% else %}
+        <p class="mt-6 text-center text-[12px] text-slate-400">
+          Ninguém com almas designadas ainda.
+        </p>
+      {% endif %}
+    </section>
+  </div>
+
+  {# =====================================================================
+     OS MESMOS NUMEROS EM TABELA
+
+     Todo grafico desta tela tem os numeros escritos aqui embaixo. Isso
+     atende quem usa leitor de tela, quem vai imprimir, e quem simplesmente
+     prefere ler o numero a estimar o tamanho da barra.
+  ===================================================================== #}
+  <details class="mt-3 rounded-lg border border-slate-200 bg-white">
+    <summary class="cursor-pointer px-4 py-2.5 text-[12px] font-semibold text-slate-600 transition hover:bg-slate-50">
+      Ver os mesmos números em tabela
+    </summary>
+
+    <div class="grid gap-4 border-t border-slate-200 p-4 sm:grid-cols-2">
+      {% set tabelas = [
+        ('Conversões por mês',   d.por_mes.rotulos,           d.por_mes.valores),
+        ('Por trabalho',         d.por_trabalho.rotulos,      d.por_trabalho.valores),
+        ('Por departamento',     d.por_departamento.rotulos,  d.por_departamento.valores),
+        ('Ciclo de vida',        d.funil.rotulos,             d.funil.valores)
+      ] %}
+
+      {% for titulo, rotulos, valores in tabelas %}
+        <div>
+          <h3 class="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+            {{ titulo }}
+          </h3>
+          <table class="w-full text-[12px]">
+            <tbody class="divide-y divide-slate-100">
+              {% for r in rotulos %}
+                <tr>
+                  <td class="py-1 text-slate-600">{{ r }}</td>
+                  <td class="py-1 text-right font-semibold tabular-nums text-slate-900">
+                    {{ valores[loop.index0] }}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    </div>
+  </details>
+
+  {# =====================================================================
+     AVISO SOBRE A PLANILHA
+  ===================================================================== #}
+  <p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+    <strong>Sobre a exportação:</strong> a planilha contém dados pessoais
+    (LGPD) e cada download fica registrado na auditoria, com quem baixou e
+    quando. A <strong>observação sensível não é exportada</strong> — um
+    arquivo de Excel circula por e-mail e WhatsApp sem nenhum controle.
+  </p>
+</div>
+{% endblock %}
+
+
+{% block scripts_extra %}
+<script>
+// ==========================================================================
+// OS GRAFICOS
+//
+// Todos os NUMEROS vem prontos do servidor (app/relatorios.py). Este arquivo
+// so desenha - nao calcula nada. Se a regra de um numero mudar, muda la.
+// ==========================================================================
+(function () {
+  "use strict";
+
+  // Le as cores das variaveis de CSS definidas no topo da pagina.
+  var estilo = getComputedStyle(document.querySelector(".viz"));
+  var cor = function (nome) { return estilo.getPropertyValue(nome).trim(); };
+
+  var SERIE       = cor("--serie");
+  var SERIE_FRACA = cor("--serie-fraca");
+  var GRADE       = cor("--grade");
+  var TINTA       = cor("--tinta-fraca");
+  var IDENT       = [cor("--ident-1"), cor("--ident-2"), cor("--ident-3")];
+
+  // Ajustes que valem para TODOS os graficos: linhas finas, fonte do sistema,
+  // grade discreta. Um grafico chama atencao pelos dados, nao pela moldura.
+  Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = TINTA;
+  Chart.defaults.plugins.legend.display = false;   // uma serie so nao precisa de legenda
+  Chart.defaults.plugins.tooltip.backgroundColor = "#0b0b0b";
+  Chart.defaults.plugins.tooltip.padding = 8;
+  Chart.defaults.plugins.tooltip.cornerRadius = 6;
+  Chart.defaults.plugins.tooltip.displayColors = false;
+
+  var SEM_GRADE = { grid: { display: false }, border: { display: false } };
+  var COM_GRADE = {
+    grid: { color: GRADE, drawTicks: false },
+    border: { display: false },
+    beginAtZero: true,
+    ticks: { precision: 0 },   // sem "2,5 almas"
+  };
+
+  function canvas(id) { return document.getElementById(id); }
+
+  // ------------------------------------------------------------------
+  // 1. CONVERSOES POR MES - linha
+  // ------------------------------------------------------------------
+  if (canvas("grafico-mes")) {
+    new Chart(canvas("grafico-mes"), {
+      type: "line",
+      data: {
+        labels: {{ d.por_mes.rotulos|tojson }},
+        datasets: [{
+          data: {{ d.por_mes.valores|tojson }},
+          borderColor: SERIE,
+          backgroundColor: SERIE_FRACA,
+          borderWidth: 2,          // linha fina: o dado, nao o traco
+          fill: true,
+          tension: 0.25,           // curva de leve; reta demais fica dura
+          pointRadius: 4,
+          pointHoverRadius: 7,     // alvo maior que a marca, para acertar
+          pointBackgroundColor: SERIE,
+          pointBorderColor: "#ffffff",
+          pointBorderWidth: 2,     // anel branco separa pontos vizinhos
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },   // mira frouxa
+        scales: { x: SEM_GRADE, y: COM_GRADE },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function (c) {
+                return c.parsed.y === 1 ? "1 conversão" : c.parsed.y + " conversões";
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Barras horizontais - o molde dos graficos 2, 4 e 5
+  // Horizontais porque os rotulos sao longos ("Trabalho das Preciosas").
+  // Em barras verticais eles ficariam de lado, ilegiveis.
+  // ------------------------------------------------------------------
+  function barrasHorizontais(id, rotulos, valores, sufixo, extras) {
+    if (!canvas(id)) return;
+    new Chart(canvas(id), {
+      type: "bar",
+      data: {
+        labels: rotulos,
+        datasets: [{
+          data: valores,
+          backgroundColor: SERIE,
+          borderRadius: 4,            // so a ponta do dado e arredondada
+          borderSkipped: "start",     // o pe da barra fica reto, na linha zero
+          barThickness: 16,
+          maxBarThickness: 18,
+        }],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: Object.assign({}, COM_GRADE, extras && extras.x ? extras.x : {}),
+          y: SEM_GRADE,
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function (c) {
+                return c.parsed.x + (sufixo || "");
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // 2. Onde as pessoas aceitam Jesus
+  barrasHorizontais(
+    "grafico-trabalho",
+    {{ d.por_trabalho.rotulos|tojson }},
+    {{ d.por_trabalho.valores|tojson }},
+    " almas"
+  );
+
+  // 4. Funil do ciclo de vida
+  barrasHorizontais(
+    "grafico-funil",
+    {{ d.funil.rotulos|tojson }},
+    {{ d.funil.valores|tojson }},
+    " almas"
+  );
+
+  // 5. Ranking de responsaveis - em PORCENTAGEM, por isso o eixo para em 100
+  var almasPorPessoa = {{ d.ranking.almas|tojson }};
+  var criticasPorPessoa = {{ d.ranking.criticas|tojson }};
+
+  if (canvas("grafico-ranking")) {
+    new Chart(canvas("grafico-ranking"), {
+      type: "bar",
+      data: {
+        labels: {{ d.ranking.rotulos|tojson }},
+        datasets: [{
+          data: {{ d.ranking.percentuais|tojson }},
+          backgroundColor: SERIE,
+          borderRadius: 4,
+          borderSkipped: "start",
+          barThickness: 16,
+        }],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: Object.assign({}, COM_GRADE, {
+            max: 100,
+            ticks: { callback: function (v) { return v + "%"; } },
+          }),
+          y: SEM_GRADE,
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              // A dica mostra a quantidade JUNTO com o percentual - sem isso
+              // o ranking premiaria quem tem menos almas.
+              label: function (c) {
+                var i = c.dataIndex;
+                var texto = c.parsed.x + "% em dia de " + almasPorPessoa[i] + " almas";
+                if (criticasPorPessoa[i]) {
+                  texto += " · " + criticasPorPessoa[i] + " crítica(s)";
+                }
+                return texto;
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // 3. DEPARTAMENTO - rosca
+  // As 3 cores foram conferidas num validador de daltonismo. Mesmo assim a
+  // legenda ao lado leva nome, numero e percentual - a cor nunca e a unica
+  // informacao.
+  // ------------------------------------------------------------------
+  if (canvas("grafico-departamento")) {
+    new Chart(canvas("grafico-departamento"), {
+      type: "doughnut",
+      data: {
+        labels: {{ d.por_departamento.rotulos|tojson }},
+        datasets: [{
+          data: {{ d.por_departamento.valores|tojson }},
+          backgroundColor: IDENT,
+          borderColor: "#ffffff",
+          borderWidth: 2,      // o fio branco separa as fatias vizinhas
+          hoverOffset: 6,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "62%",
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function (c) {
+                var total = c.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+                var pct = total ? Math.round(c.parsed * 100 / total) : 0;
+                return c.label + ": " + c.parsed + " (" + pct + "%)";
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+})();
+</script>
+{% endblock %}

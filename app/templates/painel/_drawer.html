@@ -1,0 +1,388 @@
+{# ===========================================================================
+   _drawer.html - A FICHA DA ALMA (secao 5.3).
+
+   Abre pela lateral direita ao clicar no nome, na lista do painel.
+
+   ISTO NAO E UMA PAGINA INTEIRA: nao tem {% extends %}. E um PEDACO de HTML
+   que o JavaScript busca no servidor e encaixa na tela. Por isso o painel nao
+   recarrega - a ficha simplesmente desliza por cima.
+
+   Quatro abas:
+     Dados     - a ficha completa
+     Contatos  - todo contato que o responsavel teve com ela
+     Presencas - os cultos dos ultimos 60 dias, com presenca e falta
+     Historico - todos os responsaveis que ja cuidaram dela
+
+   SEGURANCA: a rota que gera este pedaco usa @dono_da_alma_necessario.
+   Um responsavel que digite o UUID de outra alma recebe 403, nao esta ficha.
+=========================================================================== #}
+{% import "_icones.html" as ic %}
+
+{# x-data cria o estado local da ficha: qual aba esta aberta. #}
+{# x-data cria o estado local da ficha: qual aba esta aberta e se o texto
+   do WhatsApp acabou de ser copiado. #}
+<div x-data="fichaDaAlma()" class="flex h-full flex-col">
+
+  {# =====================================================================
+     CABECALHO
+  ===================================================================== #}
+  <div class="border-b border-slate-200 px-4 py-3">
+    <div class="flex items-start gap-3">
+
+      {# Circulo na cor do semaforo #}
+      <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full
+                   {{ s.classe_circulo }} text-base font-bold text-white">
+        {{ alma.inicial }}
+      </span>
+
+      <div class="min-w-0 flex-1">
+        <h2 class="text-base font-bold leading-tight text-slate-900">
+          {{ alma.nome_completo }}
+        </h2>
+        <p class="mt-0.5 text-[11px] text-slate-400">
+          {{ alma.codigo_formatado }}
+          {% if alma.idade is not none %} &middot; {{ alma.idade }} anos{% endif %}
+          &middot; {{ alma.departamento_rotulo }}
+        </p>
+      </div>
+
+      {# Botao de fechar. O @click chama a funcao do componente do painel. #}
+      <button type="button" @click="fechar()"
+              class="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              aria-label="Fechar">
+        {{ ic.icone('x', 'w-5 h-5') }}
+      </button>
+    </div>
+
+    {# --- Faixa do semaforo --- #}
+    <div class="mt-3 flex items-center gap-2 rounded-lg px-2.5 py-1.5
+                {% if s.cor == 'vermelho' %}bg-red-50 text-semaforo-vermelho
+                {% elif s.cor == 'laranja' %}bg-orange-50 text-semaforo-laranja
+                {% elif s.cor == 'amarelo' %}bg-amber-50 text-amber-700
+                {% elif s.cor == 'verde' %}bg-green-50 text-semaforo-verde
+                {% elif s.cor == 'roxo' %}bg-purple-50 text-semaforo-roxo
+                {% else %}bg-slate-100 text-slate-500{% endif %}">
+      {{ ic.icone(s.icone or 'relogio', 'w-4 h-4') }}
+      <span class="text-[12px] font-medium leading-snug">{{ s.motivo }}</span>
+    </div>
+  </div>
+
+  {# =====================================================================
+     AS ABAS
+  ===================================================================== #}
+  {% set abas = [
+    ('dados',     'Dados',     'pessoa',    none),
+    ('contatos',  'Contatos',  'telefone',  contatos|length),
+    ('presencas', 'Presenças', 'eventos',   total_presente),
+    ('historico', 'Histórico', 'relogio',   atribuicoes|length)
+  ] %}
+
+  <div class="flex border-b border-slate-200 px-2">
+    {% for chave, texto, icone_nome, contador in abas %}
+      <button type="button" @click="aba = '{{ chave }}'"
+              class="flex items-center gap-1.5 border-b-2 px-2.5 py-2 text-[12px] font-medium transition"
+              :class="aba === '{{ chave }}'
+                      ? 'border-marca text-marca'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'">
+        {{ ic.icone(icone_nome, 'w-3.5 h-3.5') }}
+        {{ texto }}
+        {% if contador is not none and contador > 0 %}
+          <span class="rounded-full bg-slate-100 px-1.5 text-[10px] font-bold text-slate-500">
+            {{ contador }}
+          </span>
+        {% endif %}
+      </button>
+    {% endfor %}
+  </div>
+
+  {# =====================================================================
+     O CONTEUDO DAS ABAS
+     overflow-y-auto = esta area rola sozinha, sem mexer no resto.
+  ===================================================================== #}
+  <div class="flex-1 overflow-y-auto px-4 py-3">
+
+    {# ===============================================================
+       ABA 1 - DADOS
+    =============================================================== #}
+    <div x-show="aba === 'dados'" class="space-y-4">
+
+      {% macro linha_dado(rotulo, valor) %}
+        <div class="flex gap-2 border-b border-slate-100 py-1.5 last:border-0">
+          <span class="w-28 shrink-0 text-[11px] text-slate-400">{{ rotulo }}</span>
+          {# {{ valor }} passa pelo autoescape do Jinja: seguro contra XSS #}
+          <span class="min-w-0 flex-1 text-[12px] text-slate-700">{{ valor or '—' }}</span>
+        </div>
+      {% endmacro %}
+
+      <section>
+        <h3 class="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Contato</h3>
+        {{ linha_dado('Telefone', alma.telefone|telefone) }}
+        {{ linha_dado('Endereço', alma.endereco_resumido) }}
+        {{ linha_dado('CEP', alma.cep) }}
+      </section>
+
+      <section>
+        <h3 class="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Pessoais</h3>
+        {{ linha_dado('Nascimento', tempo.formatar_data(alma.data_nascimento)) }}
+        {{ linha_dado('Sexo', opcoes.rotulo(opcoes.SEXOS, alma.sexo)) }}
+        {{ linha_dado('Departamento', alma.departamento_rotulo) }}
+      </section>
+
+      <section>
+        <h3 class="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">A conversão</h3>
+        {{ linha_dado('Data', tempo.formatar_data(alma.data_conversao)) }}
+        {{ linha_dado('Trabalho', alma.trabalho_rotulo) }}
+        {{ linha_dado('Status', alma.status_rotulo) }}
+        {{ linha_dado('Responsável', alma.responsavel_atual.nome if alma.responsavel_atual else 'Ainda não designado') }}
+        {% if alma.designado_em %}
+          {{ linha_dado('Designada em', tempo.formatar_data_hora(alma.designado_em)) }}
+        {% endif %}
+      </section>
+
+      {% if alma.como_chegou or alma.tem_conhecido is not none or alma.ja_frequentou_igreja is not none %}
+        <section>
+          <h3 class="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Questionário</h3>
+          {% if alma.como_chegou %}
+            <div class="border-b border-slate-100 py-1.5">
+              <p class="text-[11px] text-slate-400">Como chegou na igreja</p>
+              <p class="mt-0.5 text-[12px] leading-relaxed text-slate-700">{{ alma.como_chegou }}</p>
+            </div>
+          {% endif %}
+          {% if alma.tem_conhecido %}
+            {{ linha_dado('Conhece', alma.conhecido_nome) }}
+          {% endif %}
+          {% if alma.ja_frequentou_igreja %}
+            {{ linha_dado('Já frequentou', alma.qual_igreja) }}
+          {% endif %}
+        </section>
+      {% endif %}
+
+      <section>
+        <h3 class="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Quem cadastrou</h3>
+        {{ linha_dado('Nome', alma.cadastrante_nome) }}
+        {{ linha_dado('Telefone', alma.cadastrante_telefone|telefone) }}
+        {{ linha_dado('Consentimento', tempo.formatar_data_hora(alma.consentimento_em)) }}
+      </section>
+
+      {% if alma.responsavel_legal_nome %}
+        <section class="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5">
+          <h3 class="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+            Responsável legal (menor de idade)
+          </h3>
+          {{ linha_dado('Nome', alma.responsavel_legal_nome) }}
+          {{ linha_dado('Telefone', alma.responsavel_legal_telefone|telefone) }}
+        </section>
+      {% endif %}
+
+      {# --- OBSERVACAO SENSIVEL (secao 7, item 11) -------------------
+         So aparece para o Admin e para o responsavel ATUAL. A rota que
+         montou esta ficha JA registrou a leitura na auditoria. #}
+      {% if mostrar_observacao and alma.observacao_sensivel %}
+        <section class="rounded-lg border-2 border-red-200 bg-red-50/60 p-2.5">
+          <h3 class="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-red-700">
+            {{ ic.icone('chave', 'w-3 h-3') }} Observação sensível
+          </h3>
+          <p class="text-[12px] leading-relaxed text-slate-700">{{ alma.observacao_sensivel }}</p>
+          <p class="mt-1.5 text-[10px] text-red-600">
+            Esta leitura foi registrada na auditoria.
+          </p>
+        </section>
+      {% endif %}
+    </div>
+
+    {# ===============================================================
+       ABA 2 - CONTATOS  (o pedido principal: todo contato que o
+       responsavel teve com esta alma)
+    =============================================================== #}
+    <div x-show="aba === 'contatos'" x-cloak>
+      {% if contatos %}
+        {# Linha do tempo: um fio vertical ligando os contatos. #}
+        <ol class="relative space-y-3 border-l border-slate-200 pl-4">
+          {% for c in contatos %}
+            <li class="relative">
+              {# A bolinha na linha do tempo, colorida pelo resultado #}
+              <span class="absolute -left-[22px] top-1 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-white
+                           {% if c.resultado == 'efetivo' %}bg-semaforo-verde
+                           {% elif c.resultado == 'sem_resposta' %}bg-semaforo-amarelo
+                           {% else %}bg-semaforo-vermelho{% endif %}"></span>
+
+              <div class="rounded-lg border border-slate-200 bg-white p-2.5">
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span class="flex items-center gap-1 text-[12px] font-semibold text-slate-800">
+                    {{ ic.icone(c.tipo, 'w-3.5 h-3.5 text-slate-400') }}
+                    {{ c.tipo_rotulo }}
+                  </span>
+
+                  <span class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide
+                               {% if c.resultado == 'efetivo' %}bg-green-50 text-semaforo-verde
+                               {% elif c.resultado == 'sem_resposta' %}bg-amber-50 text-amber-700
+                               {% else %}bg-red-50 text-semaforo-vermelho{% endif %}">
+                    {{ c.resultado_rotulo }}
+                  </span>
+
+                  <span class="ml-auto text-[11px] text-slate-400">
+                    {{ tempo.formatar_data_hora(c.data_hora) }}
+                  </span>
+                </div>
+
+                {# O relato. NUNCA com |safe: e texto digitado por usuario
+                   e passa pelo autoescape (secao 7, item 5). #}
+                <p class="mt-1.5 text-[12px] leading-relaxed text-slate-600">{{ c.relato }}</p>
+
+                {% if c.responsavel %}
+                  <p class="mt-1.5 flex items-center gap-1 text-[10px] text-slate-400">
+                    {{ ic.icone('pessoa', 'w-3 h-3') }} registrado por {{ c.responsavel.nome }}
+                  </p>
+                {% endif %}
+              </div>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        {# Estado vazio desenhado (secao 6) #}
+        <div class="py-10 text-center">
+          <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            {{ ic.icone('telefone', 'w-6 h-6') }}
+          </div>
+          <p class="mt-3 text-[13px] font-semibold text-slate-700">Nenhum contato registrado</p>
+          <p class="mx-auto mt-1 max-w-[16rem] text-[12px] leading-relaxed text-slate-500">
+            Assim que o responsável registrar a primeira ligação, conversa ou
+            visita, ela aparece aqui.
+          </p>
+        </div>
+      {% endif %}
+    </div>
+
+    {# ===============================================================
+       ABA 3 - PRESENCAS  (os cultos dos ultimos 60 dias)
+    =============================================================== #}
+    <div x-show="aba === 'presencas'" x-cloak>
+
+      {# Resumo no topo #}
+      <div class="mb-3 flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2">
+        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-500">
+          {{ ic.icone('eventos', 'w-4 h-4') }}
+        </span>
+        <div>
+          <p class="text-[13px] font-bold text-slate-800">
+            {{ total_presente }} presença{{ '' if total_presente == 1 else 's' }}
+            {% if total_marcado %}
+              <span class="font-normal text-slate-400">de {{ total_marcado }} marcadas</span>
+            {% endif %}
+          </p>
+          <p class="text-[11px] text-slate-500">Últimos {{ dias_janela }} dias</p>
+        </div>
+      </div>
+
+      {% if eventos %}
+        <ul class="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+          {% for e in eventos %}
+            {% set registro = mapa_presencas.get(e.id) %}
+            <li class="flex items-center gap-2.5 px-2.5 py-2">
+
+              {# A marcacao: presente, ausente ou ainda nao marcado #}
+              {% if registro and registro.presente %}
+                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-50 text-semaforo-verde">
+                  {{ ic.icone('check', 'w-3.5 h-3.5') }}
+                </span>
+              {% elif registro %}
+                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-50 text-semaforo-vermelho">
+                  {{ ic.icone('x', 'w-3.5 h-3.5') }}
+                </span>
+              {% else %}
+                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-300"
+                      title="Ainda não marcado">
+                  {{ ic.icone('relogio', 'w-3.5 h-3.5') }}
+                </span>
+              {% endif %}
+
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[12px] font-medium text-slate-700">{{ e.nome }}</p>
+                <p class="text-[11px] text-slate-400">{{ tempo.formatar_data(e.data) }}</p>
+              </div>
+
+              <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide
+                           {% if registro and registro.presente %}text-semaforo-verde
+                           {% elif registro %}text-semaforo-vermelho
+                           {% else %}text-slate-300{% endif %}">
+                {% if registro and registro.presente %}presente
+                {% elif registro %}faltou
+                {% else %}—{% endif %}
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="py-10 text-center">
+          <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            {{ ic.icone('eventos', 'w-6 h-6') }}
+          </div>
+          <p class="mt-3 text-[13px] font-semibold text-slate-700">Nenhum culto no período</p>
+          <p class="mt-1 text-[12px] text-slate-500">
+            Gere a agenda com o comando de eventos.
+          </p>
+        </div>
+      {% endif %}
+    </div>
+
+    {# ===============================================================
+       ABA 4 - HISTORICO DE RESPONSAVEIS
+    =============================================================== #}
+    <div x-show="aba === 'historico'" x-cloak>
+      {% if atribuicoes %}
+        <ol class="relative space-y-3 border-l border-slate-200 pl-4">
+          {% for a in atribuicoes %}
+            <li class="relative">
+              <span class="absolute -left-[22px] top-1 h-4 w-4 rounded-full ring-2 ring-white
+                           {% if a.esta_ativa %}bg-marca{% else %}bg-slate-300{% endif %}"></span>
+
+              <div class="rounded-lg border border-slate-200 bg-white p-2.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-[12px] font-semibold text-slate-800">
+                    {{ a.responsavel.nome if a.responsavel else 'Responsável removido' }}
+                  </span>
+                  {% if a.esta_ativa %}
+                    <span class="rounded bg-marca/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-marca">
+                      atual
+                    </span>
+                  {% endif %}
+                </div>
+
+                <p class="mt-1 text-[11px] text-slate-500">
+                  De {{ tempo.formatar_data(a.inicio) }}
+                  {% if a.fim %} até {{ tempo.formatar_data(a.fim) }}
+                  {% else %} até hoje{% endif %}
+                </p>
+
+                {% if a.motivo %}
+                  <p class="mt-1 text-[11px] italic text-slate-500">{{ a.motivo }}</p>
+                {% endif %}
+
+                {% if a.atribuido_por %}
+                  <p class="mt-1 text-[10px] text-slate-400">
+                    designado por {{ a.atribuido_por.nome }}
+                  </p>
+                {% endif %}
+              </div>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <div class="py-10 text-center">
+          <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            {{ ic.icone('responsaveis', 'w-6 h-6') }}
+          </div>
+          <p class="mt-3 text-[13px] font-semibold text-slate-700">Ainda sem responsável</p>
+          <p class="mt-1 text-[12px] text-slate-500">
+            O histórico começa na primeira designação.
+          </p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# =====================================================================
+     RODAPE - as acoes (secao 5.3)
+  ===================================================================== #}
+  {% include "painel/_acoes.html" %}
+</div>

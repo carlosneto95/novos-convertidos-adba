@@ -1,0 +1,10 @@
+{# 403 - PROIBIDO. Esta e a tela mais importante da seguranca (secao 7, item 2): #}
+{# e o que um Responsavel ve ao tentar abrir a ficha de uma alma que nao e dele. #}
+{# O icone e o emoji de verdade, NAO o codigo HTML "&#128274;". Motivo: o        #}
+{# autoescape do Jinja transforma "&" em "&amp;" e o codigo apareceria cru na    #}
+{# tela. A solucao NUNCA e usar |safe (proibido pela secao 7, item 5).           #}
+{% set codigo = 403 %}
+{% set icone = "🔒" %}
+{% set titulo = "Acesso não autorizado" %}
+{% set mensagem = "Você não tem permissão para ver esta página. Se acredita que isso é um engano, fale com o administrador do sistema." %}
+{% include "erros/_erro.html" %}

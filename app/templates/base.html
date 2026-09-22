@@ -1,0 +1,183 @@
+{# ===========================================================================
+   base.html - O ESQUELETO DE TODAS AS PAGINAS DO SISTEMA.
+
+   Em Jinja2, isto entre chaves-cerquilha e um COMENTARIO: nunca vai para o
+   navegador. Ja {{ variavel }} imprime um valor, e {% comando %} executa logica.
+
+   Toda outra pagina comeca com {% extends "base.html" %} e preenche apenas
+   os "buracos" marcados com {% block %}. Assim o cabecalho, as fontes e os
+   cabecalhos de seguranca ficam escritos em UM lugar so.
+
+   SEGURANCA (secao 7, item 5): o autoescape do Jinja esta LIGADO por padrao
+   em arquivos .html. Isso significa que se alguem cadastrar o nome
+   <script>alert(1)</script>, o Jinja imprime o texto literal em vez de
+   executar. Por isso a regra: NUNCA usar o filtro |safe em campo digitado
+   por usuario.
+=========================================================================== #}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  {# charset UTF-8 garante que acentos e emojis aparecam corretamente #}
+  <meta charset="UTF-8">
+
+  {# viewport: faz o site se adaptar a tela do celular (secao 6, mobile-first) #}
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  {# titulo da aba do navegador; cada pagina pode sobrescrever o bloco #}
+  <title>{% block titulo %}{{ config.IGREJA_NOME }}{% endblock %} &middot; {{ config.IGREJA_NOME }}</title>
+
+  {# Fonte Inter, vinda do Google Fonts (secao 6 da especificacao) #}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  {# Tailwind CSS via CDN - sem Node, sem npm, sem build (secao 2) #}
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  {# Configuracao do Tailwind: registra nossas cores personalizadas.
+     Assim podemos escrever class="bg-marca" ou class="text-semaforo-verde". #}
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            // usa Inter; se ela nao carregar, cai na fonte do sistema
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            // ============================================================
+            // A PALETA VEM DO LOGOTIPO DA ADBA
+            // As cores foram extraidas do arquivo do logo, pixel a pixel:
+            //   a chama  -> vermelho  #C13B34
+            //   as letras-> cinza     #858488
+            // ============================================================
+
+            // "marca" e a cor principal da interface (barra de navegacao,
+            // botoes). E o cinza do logo, ESCURECIDO ate #3E3D42.
+            //
+            // POR QUE NAO USAR O VERMELHO DA MARCA NOS BOTOES?
+            // Porque no semaforo o vermelho significa ALMA CRITICA. Se os
+            // botoes tambem fossem vermelhos, a tela teria dois vermelhos
+            // parecidos com significados diferentes - e o alerta perderia
+            // a forca. O vermelho da marca fica reservado para acentos.
+            //
+            // O cinza puro do logo (#858488) tem contraste 3.71 com texto
+            // branco - abaixo do minimo de 4.5. Escurecido, sobe para 10.76.
+            marca: {
+              DEFAULT: '#3E3D42',   // grafite: barra e botoes
+              claro:   '#56555B',   // ao passar o mouse
+              escuro:  '#2A292D',   // pressionado
+            },
+
+            // O vermelho da chama. Usado em ACENTOS: o fio no topo da barra,
+            // o item ativo do menu, destaques. Nunca no fundo de um botao
+            // comum, para nao competir com o vermelho do semaforo.
+            chama: {
+              DEFAULT: '#C13B34',
+              claro:   '#D9564E',
+              escuro:  '#8E2B25',
+            },
+
+            // O cinza das letras, para textos secundarios e bordas.
+            cinzaADBA: {
+              DEFAULT: '#858488',
+              claro:   '#AEAEB3',
+              escuro:  '#5E5D62',
+            },
+
+            // As cinco cores do semaforo (secao 6 da especificacao).
+            // NAO vem do logo: sao cores de SINALIZACAO, iguais as de um
+            // semaforo de rua, e todo mundo ja sabe o que significam.
+            semaforo: {
+              verde:    '#16a34a',
+              amarelo:  '#eab308',
+              laranja:  '#f97316',
+              vermelho: '#dc2626',
+              roxo:     '#9333ea',
+            },
+          },
+          borderRadius: {
+            // cantos arredondados generosos, estilo CRM moderno
+            xl2: '1rem',
+          },
+        },
+      },
+    }
+  </script>
+
+  {# Alpine.js: da interatividade ao HTML (abas, drawer, campos condicionais).
+     defer = so executa depois que a pagina terminar de carregar. #}
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+  {# Nosso CSS proprio, para os poucos ajustes que o Tailwind nao cobre #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+
+  {# Buraco para uma pagina especifica injetar CSS ou scripts extras #}
+  {% block head_extra %}{% endblock %}
+</head>
+
+{# bg-slate-50 = fundo cinza bem claro, para os cards brancos se destacarem #}
+<body class="font-sans bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+
+  {# =====================================================================
+     BARRA DE NAVEGACAO (secao 5)
+     Na Etapa 1 ainda nao existe login, entao so mostramos a marca.
+     Na Etapa 4 este bloco passa a exibir os links conforme o papel:
+       Admin        -> Painel - Novo Convertido - Responsaveis - Eventos - Relatorios
+       Responsavel  -> Painel - Eventos
+  ===================================================================== #}
+  {% block navbar %}
+    {# A barra so aparece para quem esta logado. As telas publicas
+       (formulario de cadastro, login) apagam este bloco. #}
+    {% if current_user.is_authenticated %}
+      {% include "_navbar.html" %}
+    {% endif %}
+  {% endblock %}
+
+  {# =====================================================================
+     MENSAGENS FLASH
+     Quando uma rota chama flash("Contato registrado!", "sucesso"), a mensagem
+     aparece aqui na proxima pagina carregada.
+  ===================================================================== #}
+  {% with mensagens = get_flashed_messages(with_categories=true) %}
+    {% if mensagens %}
+      <div class="max-w-7xl mx-auto w-full px-4 pt-4 space-y-2">
+        {% for categoria, texto in mensagens %}
+          <div class="rounded-xl px-4 py-3 text-sm border
+            {% if categoria == 'sucesso' %} bg-green-50 border-green-200 text-green-800
+            {% elif categoria == 'erro' %}  bg-red-50 border-red-200 text-red-800
+            {% elif categoria == 'aviso' %} bg-amber-50 border-amber-200 text-amber-800
+            {% else %}                      bg-slate-50 border-slate-200 text-slate-700
+            {% endif %}">
+            {# {{ texto }} passa pelo autoescape: seguro contra XSS #}
+            {{ texto }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {# =====================================================================
+     CONTEUDO DA PAGINA - cada tela preenche este bloco
+  ===================================================================== #}
+  <main class="flex-1 w-full">
+    {% block conteudo %}{% endblock %}
+  </main>
+
+  {# =====================================================================
+     RODAPE
+  ===================================================================== #}
+  {% block rodape %}
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="max-w-7xl mx-auto px-4 py-5 text-xs text-slate-500 flex flex-col sm:flex-row gap-1 sm:gap-4 sm:items-center justify-between">
+      <span>{{ config.IGREJA_NOME_LEGAL }} &middot; CNPJ {{ config.IGREJA_CNPJ }}</span>
+      <span>Contato LGPD: {{ config.IGREJA_TELEFONE }}</span>
+    </div>
+  </footer>
+  {% endblock %}
+
+  {# JavaScript proprio do sistema (ViaCEP, copiar WhatsApp, etc.) #}
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block scripts_extra %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,166 @@
+{# ===========================================================================
+   _linha.html - UMA ALMA, UMA LINHA (secao 5.2).
+
+   Recebe duas variaveis:
+       alma - o registro do banco
+       s    - o semaforo JA CALCULADO no servidor (app/semaforo.py)
+
+   POR QUE "grid" E NAO "flex"?
+   A primeira versao usava flex, e as colunas saiam desalinhadas: linhas com
+   o botao "Designar" empurravam tudo, linhas sem ele nao. Com grid, as
+   larguras das colunas sao declaradas UMA vez e valem para todas as linhas -
+   inclusive para as celulas vazias. Por isso a coluna de acao existe sempre,
+   mesmo quando nao ha botao nenhum.
+
+   AS COLUNAS (a mesma receita esta no cabecalho, em index.html):
+       4px        barra colorida
+       2rem       circulo com a inicial
+       1fr        nome (a unica que estica)
+       7rem       departamento
+       7rem       responsavel
+       9rem       relogio
+       9.5rem     acao (designar)
+
+   NO CELULAR sobram so 4 colunas: barra, circulo, nome e relogio. O
+   departamento e o responsavel se mudam para baixo do nome, e o botao de
+   designar ocupa uma linha inteira embaixo.
+=========================================================================== #}
+{% import "_icones.html" as ic %}
+
+{# Só o Admin tem a coluna de ação; para o Responsável ela nem existe. #}
+{% set tem_coluna_acao = current_user.eh_admin %}
+
+<div class="grid items-center gap-2.5 px-2.5 py-2 transition hover:bg-slate-50
+            grid-cols-[4px_2rem_minmax(0,1fr)_auto]
+            {% if tem_coluna_acao %}
+              md:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_7rem_9rem_9.5rem]
+            {% else %}
+              md:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_7rem_9rem]
+            {% endif %}">
+
+  {# --- 1. BARRA COLORIDA ---------------------------------------------
+     A leitura mais rapida da linha: so a cor ja diz o estado. #}
+  <div class="h-9 w-1 rounded-full {{ s.classe_borda }}"></div>
+
+  {# --- 2. CIRCULO COM A INICIAL --------------------------------------- #}
+  <span class="flex h-8 w-8 items-center justify-center rounded-full
+               {{ s.classe_circulo }} text-[13px] font-bold text-white">
+    {{ alma.inicial }}
+  </span>
+
+  {# --- 3. NOME (a coluna que estica) ---------------------------------- #}
+  <div class="min-w-0">
+    {# O nome e um BOTAO que abre a ficha lateral (secao 5.3).
+       type="button" e essencial: sem isso, dentro de um formulario, o
+       navegador trataria como "enviar" e recarregaria a pagina. #}
+    <button type="button"
+            @click="abrirFicha('{{ alma.id }}')"
+            class="block w-full truncate text-left text-[13px] font-semibold leading-tight text-slate-900 transition hover:text-marca hover:underline decoration-marca/40 underline-offset-2">
+      {{ alma.nome_completo }}
+    </button>
+
+    {# Segunda linha. No celular ela carrega departamento e responsavel,
+       porque la essas colunas nao existem. #}
+    <p class="mt-0.5 truncate text-[11px] text-slate-400">
+      {{ alma.codigo_formatado }}
+      {% if alma.idade is not none %} &middot; {{ alma.idade }} anos{% endif %}
+      <span class="md:hidden">
+        &middot; {{ alma.departamento_rotulo }}
+        {% if alma.responsavel_atual %}
+          &middot; {{ alma.responsavel_atual.primeiro_nome }}
+        {% else %}
+          &middot; <span class="font-semibold text-semaforo-roxo">sem responsável</span>
+        {% endif %}
+      </span>
+    </p>
+  </div>
+
+  {# --- 4. DEPARTAMENTO (some no celular) ------------------------------ #}
+  <div class="hidden min-w-0 md:block">
+    <span class="inline-block max-w-full truncate rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
+      {{ alma.departamento_rotulo }}
+    </span>
+  </div>
+
+  {# --- 5. RESPONSAVEL (some no celular) ------------------------------- #}
+  <div class="hidden min-w-0 md:block">
+    {% if alma.responsavel_atual %}
+      <span class="flex min-w-0 items-center gap-1 text-[12px] text-slate-600">
+        {{ ic.icone('pessoa', 'w-3 h-3 text-slate-400') }}
+        <span class="truncate">{{ alma.responsavel_atual.primeiro_nome }}</span>
+      </span>
+    {% else %}
+      <span class="inline-block rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-semaforo-roxo">
+        sem resp.
+      </span>
+    {% endif %}
+  </div>
+
+  {# --- 6. O RELOGIO ---------------------------------------------------- #}
+  {% set classe_cor = {
+      'vermelho': 'text-semaforo-vermelho',
+      'laranja':  'text-semaforo-laranja',
+      'amarelo':  'text-amber-600',
+      'verde':    'text-semaforo-verde',
+      'roxo':     'text-semaforo-roxo'
+     }.get(s.cor, 'text-slate-400') %}
+
+  <div class="flex items-center justify-end gap-1.5 md:justify-start">
+
+    {# No computador, o texto completo #}
+    <span class="hidden items-center gap-1 text-[12px] font-medium md:flex {{ classe_cor }}">
+      {{ ic.icone('relogio', 'w-3 h-3') }}
+      <span class="truncate">{{ s.texto_curto }}</span>
+    </span>
+
+    {# No celular, so o numero - o texto inteiro nao caberia #}
+    {% if s.dias is not none %}
+      <span class="text-[12px] font-bold md:hidden {{ classe_cor }}" title="{{ s.texto_dias }}">
+        {{ s.dias }}d
+      </span>
+    {% endif %}
+
+    {# Icone do relogio que estourou.
+       title = o texto que aparece ao parar o mouse em cima. #}
+    {% if s.icone %}
+      <span class="shrink-0 rounded p-0.5
+                   {% if s.cor == 'vermelho' %}bg-red-50 text-semaforo-vermelho
+                   {% elif s.cor == 'laranja' %}bg-orange-50 text-semaforo-laranja
+                   {% elif s.cor == 'roxo' %}bg-purple-50 text-semaforo-roxo
+                   {% else %}bg-amber-50 text-semaforo-amarelo{% endif %}"
+            title="{{ s.motivo }}">
+        {{ ic.icone(s.icone, 'w-3.5 h-3.5') }}
+      </span>
+    {% endif %}
+  </div>
+
+  {# --- 7. ACAO: DESIGNAR ----------------------------------------------
+     A coluna existe em TODA linha (mesmo vazia) para as colunas nao
+     dancarem. No celular ela desce para uma linha propria, ocupando as
+     4 colunas de la (col-span-4). #}
+  {% if tem_coluna_acao %}
+    {% if alma.status_ciclo == opcoes.STATUS_INICIAL %}
+      <form method="POST" action="{{ url_for('painel.designar', alma_id=alma.id) }}"
+            class="col-span-4 flex items-center gap-1 md:col-span-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <select name="responsavel_id" required
+                class="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] text-slate-700 outline-none focus:border-marca focus:ring-1 focus:ring-marca/30">
+          <option value="">Designar...</option>
+          {% for r in responsaveis %}
+            <option value="{{ r.id }}">{{ r.nome }}</option>
+          {% endfor %}
+        </select>
+
+        <button type="submit"
+                class="flex shrink-0 items-center rounded-md bg-semaforo-roxo px-1.5 py-1 text-white transition hover:opacity-90 active:scale-95"
+                title="Confirmar a designação">
+          {{ ic.icone('check', 'w-3.5 h-3.5') }}
+        </button>
+      </form>
+    {% else %}
+      {# Celula vazia: e ela que mantem as colunas alinhadas. #}
+      <div class="hidden md:block"></div>
+    {% endif %}
+  {% endif %}
+</div>

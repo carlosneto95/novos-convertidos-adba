@@ -1,0 +1,195 @@
+{# ===========================================================================
+   _macros.html - AS PECAS REAPROVEITAVEIS DE FORMULARIO.
+
+   Uma "macro" do Jinja e como uma funcao: escrevo o desenho do campo UMA vez
+   e uso em todas as telas. Se amanha voce quiser cantos mais arredondados,
+   muda aqui e o sistema inteiro muda junto.
+
+   Para usar noutro arquivo:
+       {% import "_macros.html" as ui %}
+       {{ ui.campo(form.nome_completo) }}
+=========================================================================== #}
+
+
+{# --- CLASSES BASE (definidas uma vez, usadas por todas as macros) ------- #}
+{% set CLASSE_INPUT = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition outline-none focus:border-marca focus:ring-2 focus:ring-marca/20" %}
+{% set CLASSE_INPUT_ERRO = "w-full rounded-lg border-2 border-red-400 bg-red-50/40 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100" %}
+{% set CLASSE_LABEL = "block text-[13px] font-semibold text-slate-700 mb-1" %}
+
+
+{# =======================================================================
+   MENSAGEM DE ERRO
+   Aparece em vermelho embaixo do campo. O texto vem da validacao do
+   SERVIDOR (app/forms.py), nunca do navegador.
+======================================================================= #}
+{% macro erros(campo) %}
+  {% if campo.errors %}
+    {% for mensagem in campo.errors %}
+      <p class="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-red-600">
+        <span class="leading-none">⚠</span>
+        {# {{ mensagem }} passa pelo autoescape do Jinja: seguro #}
+        <span>{{ mensagem }}</span>
+      </p>
+    {% endfor %}
+  {% endif %}
+{% endmacro %}
+
+
+{# =======================================================================
+   CAMPO DE TEXTO simples (nome, telefone, CEP, numero...)
+   Parametros:
+     campo      - o campo vindo do form.py
+     dica       - texto cinza de ajuda embaixo
+     obrigatorio- mostra a bolinha vermelha ao lado do rotulo
+     extra      - atributos HTML a mais (ex: x-model do Alpine)
+======================================================================= #}
+{% macro campo(campo, dica=None, obrigatorio=False, extra={}) %}
+  <div>
+    <label for="{{ campo.id }}" class="{{ CLASSE_LABEL }}">
+      {{ campo.label.text }}
+      {% if obrigatorio %}<span class="text-red-500">*</span>{% endif %}
+    </label>
+
+    {# Se o campo tem erro, ele ganha a borda vermelha #}
+    {{ campo(class=(CLASSE_INPUT_ERRO if campo.errors else CLASSE_INPUT), **extra) }}
+
+    {% if dica and not campo.errors %}
+      <p class="mt-1.5 text-xs text-slate-500">{{ dica }}</p>
+    {% endif %}
+
+    {{ erros(campo) }}
+  </div>
+{% endmacro %}
+
+
+{# =======================================================================
+   CAIXA DE TEXTO GRANDE (como_chegou)
+======================================================================= #}
+{% macro area(campo, dica=None, extra={}) %}
+  <div>
+    <label for="{{ campo.id }}" class="{{ CLASSE_LABEL }}">{{ campo.label.text }}</label>
+    {{ campo(class=(CLASSE_INPUT_ERRO if campo.errors else CLASSE_INPUT) ~ " resize-none leading-relaxed", **extra) }}
+    {% if dica and not campo.errors %}
+      <p class="mt-1.5 text-xs text-slate-500">{{ dica }}</p>
+    {% endif %}
+    {{ erros(campo) }}
+  </div>
+{% endmacro %}
+
+
+{# =======================================================================
+   LISTA SUSPENSA (UF)
+======================================================================= #}
+{% macro selecao(campo, extra={}) %}
+  <div>
+    <label for="{{ campo.id }}" class="{{ CLASSE_LABEL }}">{{ campo.label.text }}</label>
+    {{ campo(class=(CLASSE_INPUT_ERRO if campo.errors else CLASSE_INPUT) ~ " appearance-none cursor-pointer", **extra) }}
+    {{ erros(campo) }}
+  </div>
+{% endmacro %}
+
+
+{# =======================================================================
+   ESCOLHA EM FORMATO DE CARTAO (sexo, trabalho, departamento)
+
+   Em vez de bolinhas minusculas de radio, cada opcao vira um cartao grande -
+   facil de acertar com o dedo no celular (secao 6: mobile-first).
+
+   COMO FUNCIONA O DESTAQUE DO SELECIONADO:
+   O input fica invisivel ("sr-only" = so para leitores de tela) mas continua
+   funcionando. O rotulo ao lado usa "peer-checked:", que quer dizer
+   "quando o meu vizinho input estiver marcado, mude minha aparencia".
+   Zero JavaScript envolvido.
+
+   Parametros:
+     colunas   - quantas por linha no desktop
+     sugestoes - dicionario {valor: "texto do selo"} para marcar a sugestao
+======================================================================= #}
+{% macro cartoes(campo, colunas=2, obrigatorio=False, sugestao_attr=None, extra={}) %}
+  <fieldset>
+    <legend class="{{ CLASSE_LABEL }}">
+      {{ campo.label.text }}
+      {% if obrigatorio %}<span class="text-red-500">*</span>{% endif %}
+    </legend>
+
+    <div class="grid grid-cols-1 sm:grid-cols-{{ colunas }} gap-2">
+      {% for opcao in campo %}
+        <div class="relative">
+          {# O input de verdade, invisivel mas funcional #}
+          {{ opcao(class="peer sr-only", **extra) }}
+
+          <label for="{{ opcao.id }}"
+                 class="flex cursor-pointer items-center gap-2.5 rounded-lg border-2 border-slate-200 bg-white px-3 py-2.5 text-[13px] font-medium text-slate-700 transition
+                        hover:border-slate-300 hover:bg-slate-50
+                        peer-checked:border-marca peer-checked:bg-marca/5 peer-checked:text-marca peer-checked:shadow-sm
+                        peer-focus-visible:ring-2 peer-focus-visible:ring-marca/20">
+
+            {# A bolinha desenhada a mao, que se preenche quando marcado.
+               O preenchimento e feito no custom.css e NAO com "peer-checked:"
+               do Tailwind. Motivo: "peer-checked:" so alcanca IRMAOS do input,
+               e esta bolinha esta DENTRO do rotulo - ela e sobrinha, nao irma.
+               O CSS usa o seletor descendente, que alcanca. #}
+            <span class="ponto-radio flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-slate-300 transition">
+              <span class="h-2 w-2 rounded-full bg-marca opacity-0 transition"></span>
+            </span>
+
+            <span class="flex-1">{{ opcao.label.text }}</span>
+
+            {# Selo "Sugerido", controlado pelo Alpine (usado no departamento) #}
+            {% if sugestao_attr %}
+              <span x-show="{{ sugestao_attr }} === '{{ opcao.data }}'"
+                    x-cloak
+                    class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                sugerido
+              </span>
+            {% endif %}
+          </label>
+        </div>
+      {% endfor %}
+    </div>
+
+    {{ erros(campo) }}
+  </fieldset>
+{% endmacro %}
+
+
+{# =======================================================================
+   ESCOLHA SIM / NAO em duas pilulas lado a lado
+======================================================================= #}
+{% macro sim_nao(campo, extra={}) %}
+  <fieldset>
+    <legend class="{{ CLASSE_LABEL }}">{{ campo.label.text }}</legend>
+    <div class="flex gap-2">
+      {% for opcao in campo %}
+        <div class="relative flex-1">
+          {{ opcao(class="peer sr-only", **extra) }}
+          <label for="{{ opcao.id }}"
+                 class="block cursor-pointer rounded-lg border-2 border-slate-200 bg-white px-3 py-2 text-center text-[13px] font-semibold text-slate-600 transition
+                        hover:border-slate-300
+                        peer-checked:border-marca peer-checked:bg-marca peer-checked:text-white peer-checked:shadow-sm">
+            {{ opcao.label.text }}
+          </label>
+        </div>
+      {% endfor %}
+    </div>
+    {{ erros(campo) }}
+  </fieldset>
+{% endmacro %}
+
+
+{# =======================================================================
+   CAIXA DE MARCAR (consentimento LGPD)
+   Recebe o texto legal como "conteudo" para permitir negrito e links.
+======================================================================= #}
+{% macro checkbox(campo, destaque=False) %}
+  <div class="rounded-lg border-2 p-3 transition
+              {% if campo.errors %}border-red-300 bg-red-50/50
+              {% elif destaque %}border-amber-200 bg-amber-50/60
+              {% else %}border-slate-200 bg-slate-50/60{% endif %}">
+    <label for="{{ campo.id }}" class="flex cursor-pointer items-start gap-3">
+      {{ campo(class="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-2 border-slate-400 text-marca accent-marca focus:ring-2 focus:ring-marca/30") }}
+      <span class="text-xs leading-relaxed text-slate-700">{{ caller() }}</span>
+    </label>
+    {{ erros(campo) }}
+  </div>
+{% endmacro %}

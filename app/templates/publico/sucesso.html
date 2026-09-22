@@ -1,0 +1,66 @@
+{# ===========================================================================
+   sucesso.html - "Cadastro realizado!" e mais nada.
+
+   REGRA DE SEGURANCA (secao 5.1): esta tela NAO mostra o nome cadastrado, nao
+   mostra o codigo, e nao tem link para nenhuma outra parte do sistema.
+
+   Motivo: quem preencheu o formulario pode ser qualquer pessoa da igreja. Ela
+   nao pode sair daqui sabendo dados de terceiros, nem descobrindo que existe
+   um painel interno para tentar acessar.
+=========================================================================== #}
+{% extends "base.html" %}
+
+{% block titulo %}Cadastro realizado{% endblock %}
+{% block navbar %}{% endblock %}
+{% block rodape %}{% endblock %}
+
+{% block conteudo %}
+<div class="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+  <div class="w-full max-w-md text-center">
+
+    {# --- Circulo verde com as maos erguidas --- #}
+    <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-green-100 text-5xl">
+      🙌
+    </div>
+
+    <h1 class="mt-7 text-3xl font-bold tracking-tight text-slate-900">
+      Cadastro realizado!
+    </h1>
+
+    <p class="mx-auto mt-3 max-w-sm text-base leading-relaxed text-slate-600">
+      Que alegria! A equipe de evangelismo da
+      <strong class="text-slate-800">{{ config.IGREJA_NOME }}</strong>
+      já foi avisada e vai entrar em contato em breve.
+    </p>
+
+    {# --- Versiculo, para fechar com o tom da casa --- #}
+    <div class="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p class="text-sm italic leading-relaxed text-slate-600">
+        "Haverá alegria no céu por um pecador que se arrepende."
+      </p>
+      <p class="mt-2 text-xs font-semibold uppercase tracking-wide text-marca/70">
+        Lucas 15:7
+      </p>
+    </div>
+
+    {# --- Voltar ao formulário para cadastrar outra pessoa ---
+         Este e o UNICO link da pagina, e leva de volta ao proprio formulario.
+         Nao ha caminho daqui para o painel nem para o login. --- #}
+    <p class="mt-8 text-sm text-slate-500">
+      Precisa cadastrar outra pessoa?
+      <a href="javascript:history.back()"
+         class="font-semibold text-marca underline decoration-marca/30 underline-offset-2 transition hover:decoration-marca">
+        Voltar ao formulário
+      </a>
+    </p>
+
+    {# --- Rodape com o contato de LGPD --- #}
+    <p class="mt-10 text-[11px] leading-relaxed text-slate-400">
+      <img src="{{ url_for('static', filename='img/logo-adba.png') }}"
+           alt="{{ config.IGREJA_NOME }}" class="mx-auto mb-3 h-8 w-auto opacity-60"><br>
+      {{ config.IGREJA_NOME_LEGAL }}<br>
+      Dúvidas sobre seus dados: {{ config.IGREJA_TELEFONE }}
+    </p>
+  </div>
+</div>
+{% endblock %}

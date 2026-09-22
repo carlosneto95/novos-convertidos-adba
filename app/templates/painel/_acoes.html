@@ -1,0 +1,242 @@
+{# ===========================================================================
+   _acoes.html - O RODAPE DE ACOES DA FICHA (secao 5.3).
+
+     Registrar contato · Marcar presença · Alterar status ·
+     Transferir responsável (só Admin) · Copiar relatório WhatsApp
+
+   COMO FUNCIONA:
+   Cinco botoes pequenos. Cada um abre um painelzinho logo acima, com o
+   formulario daquela acao. So um fica aberto por vez - a variavel "acao" do
+   Alpine guarda qual.
+
+   POR QUE NAO CINCO JANELAS FLUTUANTES?
+   Janela sobre janela confunde, ainda mais no celular. Aqui o formulario
+   nasce dentro da propria ficha, no lugar onde a pessoa ja esta olhando.
+
+   SEGURANCA: cada formulario e um POST de verdade, com token CSRF, e a rota
+   do outro lado revalida TUDO no servidor. Esconder um botao nao protege
+   nada - quem protege e o decorador na rota.
+=========================================================================== #}
+{% import "_icones.html" as ic %}
+{% import "_macros.html" as ui %}
+
+<div x-data="{ acao: '' }" class="border-t border-slate-200 bg-slate-50">
+
+  {# =====================================================================
+     O PAINELZINHO DO FORMULARIO
+     Aparece acima dos botoes, empurrando a lista para cima.
+  ===================================================================== #}
+  <div x-show="acao" x-cloak class="max-h-[55vh] overflow-y-auto border-b border-slate-200 bg-white px-4 py-3">
+
+    {# ---------------- REGISTRAR CONTATO ---------------- #}
+    <form x-show="acao === 'contato'"
+          method="POST"
+          action="{{ url_for('acoes.registrar_contato', alma_id=alma.id) }}"
+          class="space-y-3">
+      {{ form_contato.hidden_tag() }}
+
+      <div class="flex items-center justify-between">
+        <h3 class="flex items-center gap-1.5 text-[13px] font-bold text-slate-800">
+          {{ ic.icone('telefone', 'w-4 h-4 text-marca') }} Registrar contato
+        </h3>
+        <button type="button" @click="acao = ''"
+                class="rounded p-1 text-slate-400 transition hover:bg-slate-100">
+          {{ ic.icone('x', 'w-4 h-4') }}
+        </button>
+      </div>
+
+      {{ ui.cartoes(form_contato.tipo, colunas=3, obrigatorio=True) }}
+      {{ ui.cartoes(form_contato.resultado, colunas=1, obrigatorio=True) }}
+      {{ ui.campo(form_contato.data_hora, obrigatorio=True,
+                  dica='Quando o contato ACONTECEU (já vem com a hora de agora).') }}
+      {{ ui.area(form_contato.relato) }}
+
+      <button type="submit"
+              class="w-full rounded-lg bg-marca px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-marca-claro active:scale-[0.99]">
+        Salvar contato
+      </button>
+    </form>
+
+    {# ---------------- MARCAR PRESENÇA ---------------- #}
+    <form x-show="acao === 'presenca'"
+          method="POST"
+          action="{{ url_for('acoes.marcar_presenca', alma_id=alma.id) }}"
+          class="space-y-3">
+      {{ form_presenca.hidden_tag() }}
+
+      <div class="flex items-center justify-between">
+        <h3 class="flex items-center gap-1.5 text-[13px] font-bold text-slate-800">
+          {{ ic.icone('eventos', 'w-4 h-4 text-marca') }} Marcar presença
+        </h3>
+        <button type="button" @click="acao = ''"
+                class="rounded p-1 text-slate-400 transition hover:bg-slate-100">
+          {{ ic.icone('x', 'w-4 h-4') }}
+        </button>
+      </div>
+
+      {% if tem_eventos %}
+        {{ ui.selecao(form_presenca.evento_id) }}
+        {{ ui.cartoes(form_presenca.presente, colunas=1, obrigatorio=True) }}
+
+        <button type="submit"
+                class="w-full rounded-lg bg-marca px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-marca-claro active:scale-[0.99]">
+          Salvar presença
+        </button>
+      {% else %}
+        <p class="rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+          Não há cultos cadastrados no período. Peça ao administrador para
+          gerar a agenda.
+        </p>
+      {% endif %}
+    </form>
+
+    {# ---------------- ALTERAR STATUS ---------------- #}
+    <form x-show="acao === 'status'"
+          method="POST"
+          action="{{ url_for('acoes.alterar_status', alma_id=alma.id) }}"
+          class="space-y-3"
+          x-data="{ novoStatus: '{{ alma.status_ciclo }}' }">
+      {{ form_status.hidden_tag() }}
+
+      <div class="flex items-center justify-between">
+        <h3 class="flex items-center gap-1.5 text-[13px] font-bold text-slate-800">
+          {{ ic.icone('integrada', 'w-4 h-4 text-marca') }} Alterar status
+        </h3>
+        <button type="button" @click="acao = ''"
+                class="rounded p-1 text-slate-400 transition hover:bg-slate-100">
+          {{ ic.icone('x', 'w-4 h-4') }}
+        </button>
+      </div>
+
+      {{ ui.selecao(form_status.status_ciclo, extra={'x-model': 'novoStatus'}) }}
+
+      {# O aviso so aparece quando a escolha ENCERRA o acompanhamento.
+         A obrigatoriedade de verdade e checada no servidor (StatusForm). #}
+      {# POR QUE NAO MONTAR A LISTA DE STATUS AQUI?
+         Escrever a lista vinda do Python dentro do atributo daria trabalho:
+         o autoescape do Jinja troca cada aspa por &#39; e a expressao quebra.
+         A saida limpa e inverter a pergunta - "encerrar" e qualquer coisa
+         que NAO seja um dos dois status de acompanhamento ativo. Mesma
+         regra, sem lista e sem escape.
+         A obrigatoriedade de verdade continua no servidor (StatusForm). #}
+      <div x-show="novoStatus !== '{{ opcoes.STATUS_ATIVO }}' && novoStatus !== '{{ opcoes.STATUS_INICIAL }}'"
+           x-cloak
+           class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+        <p class="text-[11px] leading-relaxed text-amber-800">
+          <strong>Isso encerra o acompanhamento.</strong>
+          {{ alma.primeiro_nome }} sai do semáforo e do painel principal.
+          A justificativa é obrigatória.
+        </p>
+      </div>
+
+      {{ ui.area(form_status.justificativa) }}
+
+      <button type="submit"
+              class="w-full rounded-lg bg-marca px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-marca-claro active:scale-[0.99]">
+        Salvar status
+      </button>
+    </form>
+
+    {# ---------------- TRANSFERIR RESPONSÁVEL (só Admin) ---------------- #}
+    {% if current_user.eh_admin %}
+      <form x-show="acao === 'transferir'"
+            method="POST"
+            action="{{ url_for('acoes.transferir', alma_id=alma.id) }}"
+            class="space-y-3">
+        {{ form_transferir.hidden_tag() }}
+
+        <div class="flex items-center justify-between">
+          <h3 class="flex items-center gap-1.5 text-[13px] font-bold text-slate-800">
+            {{ ic.icone('responsaveis', 'w-4 h-4 text-marca') }} Transferir responsável
+          </h3>
+          <button type="button" @click="acao = ''"
+                  class="rounded p-1 text-slate-400 transition hover:bg-slate-100">
+            {{ ic.icone('x', 'w-4 h-4') }}
+          </button>
+        </div>
+
+        {# O aviso mais importante desta tela #}
+        <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <p class="text-[11px] leading-relaxed text-amber-800">
+            <strong>O relógio volta para 48 horas.</strong>
+            O novo responsável precisa se apresentar nesse prazo.
+            O histórico de contatos continua inteiro.
+          </p>
+        </div>
+
+        {{ ui.selecao(form_transferir.responsavel_id) }}
+        {{ ui.area(form_transferir.motivo) }}
+
+        {# A observação sensível NÃO é repassada por padrão (seção 7, item 11).
+           A caixa nasce desmarcada de propósito: o Admin decide, caso a caso. #}
+        {% if alma.observacao_sensivel %}
+          {% call ui.checkbox(form_transferir.manter_observacao, destaque=True) %}
+            Esta alma tem uma <strong>observação sensível</strong> registrada.
+            Por padrão ela <strong>não é repassada</strong> — marque só se o
+            novo responsável precisar saber.
+          {% endcall %}
+        {% endif %}
+
+        <button type="submit"
+                class="w-full rounded-lg bg-marca px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-marca-claro active:scale-[0.99]">
+          Confirmar transferência
+        </button>
+      </form>
+    {% endif %}
+
+    {# ---------------- RELATÓRIO WHATSAPP ---------------- #}
+    <div x-show="acao === 'whatsapp'" class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="flex items-center gap-1.5 text-[13px] font-bold text-slate-800">
+          {{ ic.icone('whatsapp', 'w-4 h-4 text-marca') }} Relatório para WhatsApp
+        </h3>
+        <button type="button" @click="acao = ''"
+                class="rounded p-1 text-slate-400 transition hover:bg-slate-100">
+          {{ ic.icone('x', 'w-4 h-4') }}
+        </button>
+      </div>
+
+      {# O texto foi montado no SERVIDOR. Fica numa caixa selecionavel: se a
+         copia automatica falhar (navegador antigo, conexao sem HTTPS), a
+         pessoa ainda consegue selecionar e copiar com Ctrl+C. #}
+      <textarea readonly x-ref="textoZap"
+                rows="8"
+                class="w-full resize-none rounded-lg border border-slate-300 bg-slate-50 p-2.5 font-mono text-[11px] leading-relaxed text-slate-700">{{ texto_whatsapp }}</textarea>
+
+      <button type="button"
+              @click="copiarTexto($refs.textoZap)"
+              class="flex w-full items-center justify-center gap-1.5 rounded-lg bg-green-600 px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-green-700 active:scale-[0.99]">
+        {{ ic.icone('copiar', 'w-4 h-4') }}
+        <span x-text="textoCopiado ? 'Copiado!' : 'Copiar para a área de transferência'"></span>
+      </button>
+    </div>
+  </div>
+
+  {# =====================================================================
+     A BARRA DE BOTOES
+  ===================================================================== #}
+  {% set botoes = [
+    ('contato',    'Contato',   'telefone',     true),
+    ('presenca',   'Presença',  'eventos',      true),
+    ('status',     'Status',    'integrada',    true),
+    ('transferir', 'Transferir','responsaveis', current_user.eh_admin),
+    ('whatsapp',   'WhatsApp',  'whatsapp',     true)
+  ] %}
+
+  <div class="flex gap-1 overflow-x-auto px-2 py-2">
+    {% for chave, texto, icone_nome, visivel in botoes %}
+      {% if visivel %}
+        {# Clicar no botao ja aberto FECHA o painelzinho. #}
+        <button type="button"
+                @click="acao = (acao === '{{ chave }}' ? '' : '{{ chave }}')"
+                class="flex shrink-0 flex-col items-center gap-0.5 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition"
+                :class="acao === '{{ chave }}'
+                        ? 'bg-marca text-white'
+                        : 'text-slate-600 hover:bg-slate-200'">
+          {{ ic.icone(icone_nome, 'w-4 h-4') }}
+          {{ texto }}
+        </button>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>

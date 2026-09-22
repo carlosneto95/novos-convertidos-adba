@@ -1,0 +1,8 @@
+{# 500 - ERRO INTERNO. Nunca mostramos o erro tecnico ao usuario final: o texto  #}
+{# do erro revelaria caminhos de arquivo e nomes de tabela para um invasor.      #}
+{# O icone e o emoji de verdade (ver explicacao no arquivo 403.html).            #}
+{% set codigo = 500 %}
+{% set icone = "🔧" %}
+{% set titulo = "Algo deu errado do nosso lado" %}
+{% set mensagem = "Tivemos um problema ao processar sua solicitação. Nada foi gravado pela metade. Tente novamente em instantes." %}
+{% include "erros/_erro.html" %}

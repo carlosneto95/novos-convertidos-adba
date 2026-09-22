@@ -1,0 +1,34 @@
+# ===========================================================================
+# requirements.txt — a "lista de compras" de bibliotecas do projeto.
+# O comando "pip install -r requirements.txt" le este arquivo e instala tudo.
+# O sinal ">=" significa "desta versao para cima" — garante correcoes de
+# seguranca sem quebrar o codigo.
+# ===========================================================================
+
+# --- O NUCLEO -------------------------------------------------------------
+Flask>=3.1.0                 # o framework web: transforma Python em site
+Werkzeug>=3.1.0              # motor interno do Flask (HTTP, rotas, seguranca)
+Jinja2>=3.1.4                # motor de templates HTML (ja vem com autoescape)
+
+# --- BANCO DE DADOS -------------------------------------------------------
+SQLAlchemy>=2.0.36           # o "tradutor": escrevo Python, ele fala SQL
+Flask-SQLAlchemy>=3.1.1      # cola o SQLAlchemy dentro do Flask
+Flask-Migrate>=4.0.7         # versiona o banco (Alembic): altera tabelas sem perder dados
+
+# --- AUTENTICACAO E SEGURANCA ---------------------------------------------
+Flask-Login>=0.6.3           # controla quem esta logado e quem nao esta
+Flask-Bcrypt>=1.0.1          # transforma senha em hash irreversivel
+bcrypt>=4.2.0                # o algoritmo por tras do Flask-Bcrypt
+Flask-WTF>=1.2.1             # formularios com protecao CSRF automatica
+WTForms>=3.1.2               # validacao dos campos no SERVIDOR
+email-validator>=2.2.0       # valida formato de e-mail (usado pelo WTForms)
+Flask-Limiter>=3.8.0         # limita tentativas por IP (anti-forca-bruta e anti-bot)
+
+# --- RELATORIOS -----------------------------------------------------------
+openpyxl>=3.1.5              # gera os arquivos .xlsx do botao "Exportar Excel"
+
+# --- CONFIGURACAO ---------------------------------------------------------
+python-dotenv>=1.0.1         # le o arquivo .env e carrega os segredos
+
+# --- FUSO HORARIO --------------------------------------------------------
+tzdata>=2024.2               # tabela mundial de fusos; o Windows nao traz, o Linux traz

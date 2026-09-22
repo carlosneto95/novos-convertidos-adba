@@ -1,0 +1,209 @@
+{# ===========================================================================
+   eventos/index.html - A AGENDA DE CULTOS (secao 5.5).
+
+   Admin       - ve e cadastra
+   Responsavel - so visualiza
+
+   Os botoes de cadastrar so aparecem para o Admin. Mas quem PROTEGE de
+   verdade e o decorador @admin_necessario nas rotas: esconder um botao
+   apenas evita o clique, nao o acesso pela URL.
+=========================================================================== #}
+{% extends "base.html" %}
+{% import "_icones.html" as ic %}
+{% import "_macros.html" as ui %}
+
+{% block titulo %}Eventos{% endblock %}
+
+{% block conteudo %}
+<div x-data="{ formAberto: false }" class="mx-auto max-w-5xl px-3 py-4 sm:px-4">
+
+  {# =====================================================================
+     CABECALHO
+  ===================================================================== #}
+  <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <div>
+      <h1 class="text-lg font-bold tracking-tight text-slate-900">Eventos</h1>
+      <p class="text-[12px] text-slate-500">
+        {{ proximos|length }} pela frente &middot; {{ passados|length }} nos últimos 90 dias
+      </p>
+    </div>
+
+    {% if current_user.eh_admin %}
+      <div class="flex gap-2">
+        {# Gerar agenda: os cultos de domingo e terça, 90 dias à frente.
+           O mesmo trabalho do comando de terminal, mas por um botão. #}
+        <form method="POST" action="{{ url_for('eventos.gerar_agenda') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"
+                  class="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                  title="Cria os cultos de domingo e terça que ainda faltam">
+            {{ ic.icone('eventos', 'w-4 h-4') }} Gerar agenda
+          </button>
+        </form>
+
+        <button type="button" @click="formAberto = !formAberto"
+                class="flex items-center gap-1.5 rounded-lg bg-marca px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-marca-claro">
+          {{ ic.icone('mais', 'w-4 h-4') }} Novo evento
+        </button>
+      </div>
+    {% endif %}
+  </div>
+
+  {# =====================================================================
+     FORMULARIO DE CADASTRO (so Admin)
+  ===================================================================== #}
+  {% if current_user.eh_admin %}
+    <div x-show="formAberto" x-cloak
+         class="mb-3 rounded-lg border border-slate-200 bg-white p-4">
+      <form method="POST" action="{{ url_for('eventos.criar') }}" class="space-y-3" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="flex items-center justify-between">
+          <h2 class="text-[13px] font-bold text-slate-800">Cadastrar evento pontual</h2>
+          <button type="button" @click="formAberto = false"
+                  class="rounded p-1 text-slate-400 transition hover:bg-slate-100">
+            {{ ic.icone('x', 'w-4 h-4') }}
+          </button>
+        </div>
+
+        <p class="text-[11px] leading-relaxed text-slate-500">
+          Para vigílias, congressos e encontros fora da rotina. Os cultos de
+          domingo e terça já são gerados sozinhos pelo botão "Gerar agenda".
+        </p>
+
+        <div class="grid gap-3 sm:grid-cols-3">
+          {{ ui.campo(form.nome, obrigatorio=True) }}
+          {{ ui.selecao(form.tipo) }}
+          {{ ui.campo(form.data, obrigatorio=True) }}
+        </div>
+
+        <button type="submit"
+                class="w-full rounded-lg bg-marca px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-marca-claro sm:w-auto">
+          Cadastrar evento
+        </button>
+      </form>
+    </div>
+  {% endif %}
+
+  {# =====================================================================
+     MACRO DA LINHA DE EVENTO
+     Escrita uma vez, usada nas duas listas.
+  ===================================================================== #}
+  {% macro linha_evento(e, passado=False) %}
+    <div class="flex items-center gap-3 px-3 py-2.5 transition hover:bg-slate-50
+                {% if not e.ativo %}bg-slate-50/70{% endif %}">
+
+      {# A data num quadradinho, como folhinha de calendário #}
+      <div class="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg border
+                  {% if not e.ativo %}border-slate-200 bg-slate-100 text-slate-400
+                  {% elif e.data == hoje %}border-chama bg-chama/10 text-chama
+                  {% elif passado %}border-slate-200 bg-white text-slate-400
+                  {% else %}border-marca/20 bg-marca/5 text-marca{% endif %}">
+        <span class="text-[15px] font-bold leading-none">{{ e.data.strftime('%d') }}</span>
+        <span class="text-[9px] font-semibold uppercase leading-none">
+          {{ ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][e.data.month - 1] }}
+        </span>
+      </div>
+
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-[13px] font-semibold
+                  {% if e.ativo %}text-slate-900{% else %}text-slate-400 line-through{% endif %}">
+          {{ e.nome }}
+        </p>
+        <p class="truncate text-[11px] text-slate-400">
+          {{ ['segunda','terça','quarta','quinta','sexta','sábado','domingo'][e.data.weekday()] }}
+          &middot; {{ e.tipo_rotulo }}
+          {% if e.recorrente %}
+            &middot; <span title="Gerado automaticamente">recorrente</span>
+          {% endif %}
+          {% if not e.ativo %}
+            &middot; <span class="font-semibold text-semaforo-vermelho">cancelado</span>
+          {% endif %}
+        </p>
+      </div>
+
+      {# Quantas presenças já foram marcadas #}
+      {% set presentes = contagem_presencas.get(e.id, 0) %}
+      {% if presentes %}
+        <span class="flex shrink-0 items-center gap-1 rounded bg-green-50 px-1.5 py-0.5 text-[11px] font-semibold text-semaforo-verde"
+              title="{{ presentes }} presença(s) marcada(s)">
+          {{ ic.icone('check', 'w-3 h-3') }} {{ presentes }}
+        </span>
+      {% endif %}
+
+      {% if e.data == hoje %}
+        <span class="shrink-0 rounded bg-chama/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-chama">
+          hoje
+        </span>
+      {% endif %}
+
+      {# Cancelar / reativar - só Admin #}
+      {% if current_user.eh_admin %}
+        <form method="POST" action="{{ url_for('eventos.cancelar', evento_id=e.id) }}" class="shrink-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"
+                  class="rounded-md p-1.5 transition
+                         {% if e.ativo %}text-slate-300 hover:bg-red-50 hover:text-semaforo-vermelho
+                         {% else %}text-semaforo-verde hover:bg-green-50{% endif %}"
+                  title="{{ 'Cancelar este evento' if e.ativo else 'Devolver à agenda' }}">
+            {{ ic.icone('x' if e.ativo else 'check', 'w-4 h-4') }}
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  {% endmacro %}
+
+  {# =====================================================================
+     OS PROXIMOS
+  ===================================================================== #}
+  <section class="mb-4">
+    <h2 class="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+      {{ ic.icone('seta-direita', 'w-3.5 h-3.5') }} Próximos
+    </h2>
+
+    {% if proximos %}
+      <div class="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
+        {% for e in proximos %}{{ linha_evento(e) }}{% endfor %}
+      </div>
+    {% else %}
+      {# Estado vazio desenhado (secao 6) #}
+      <div class="rounded-lg border-2 border-dashed border-slate-200 bg-white px-6 py-10 text-center">
+        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+          {{ ic.icone('eventos', 'w-6 h-6') }}
+        </div>
+        <p class="mt-3 text-[13px] font-semibold text-slate-700">A agenda acabou</p>
+        <p class="mx-auto mt-1 max-w-sm text-[12px] leading-relaxed text-slate-500">
+          Sem cultos cadastrados, ninguém consegue marcar presença.
+          {% if current_user.eh_admin %}
+            Clique em <strong>Gerar agenda</strong> para criar os próximos 90 dias.
+          {% else %}
+            Peça ao administrador para gerar a agenda.
+          {% endif %}
+        </p>
+      </div>
+    {% endif %}
+  </section>
+
+  {# =====================================================================
+     OS PASSADOS
+  ===================================================================== #}
+  {% if passados %}
+    <section>
+      <h2 class="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+        {{ ic.icone('seta-esquerda', 'w-3.5 h-3.5') }} Últimos 90 dias
+      </h2>
+      <div class="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
+        {% for e in passados %}{{ linha_evento(e, passado=True) }}{% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {# =====================================================================
+     NOTA DE RODAPE
+  ===================================================================== #}
+  <p class="mt-3 text-[11px] leading-relaxed text-slate-400">
+    Cancelar um culto <strong>não apaga</strong> as presenças já marcadas nele —
+    o histórico de frequência de cada alma continua inteiro.
+  </p>
+</div>
+{% endblock %}

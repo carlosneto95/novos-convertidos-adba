@@ -1,0 +1,178 @@
+{# ===========================================================================
+   admin/duplicatas.html - REGISTROS REPETIDOS (secao 5.7). SO ADMIN.
+
+   O sistema SUGERE; quem confirma e uma pessoa. Juntar duas almas
+   diferentes por engano apagaria o acompanhamento de uma delas - por isso
+   cada par aparece lado a lado, com os dados a vista, antes do clique.
+=========================================================================== #}
+{% extends "base.html" %}
+{% import "_icones.html" as ic %}
+
+{% block titulo %}Duplicados{% endblock %}
+
+{% block conteudo %}
+<div class="mx-auto max-w-5xl px-3 py-4 sm:px-4">
+
+  {# =====================================================================
+     CABECALHO
+  ===================================================================== #}
+  <div class="mb-3">
+    <h1 class="text-lg font-bold tracking-tight text-slate-900">
+      Possíveis registros repetidos
+    </h1>
+    <p class="mt-0.5 text-[12px] leading-relaxed text-slate-500">
+      O formulário é público e qualquer membro cadastra. Na mesma noite, três
+      irmãos podem cadastrar a mesma pessoa — cada um achando que foi o
+      primeiro.
+      {% if ja_mescladas %}
+        <br>{{ ja_mescladas }} registro(s) já foram mesclados antes.
+      {% endif %}
+    </p>
+  </div>
+
+  {% if pares %}
+    <p class="mb-2 text-[11px] text-slate-400">
+      {{ pares|length }} par(es) suspeito(s), do mais provável para o menos.
+    </p>
+
+    <div class="space-y-3">
+      {% for par in pares %}
+        {% set p = par.principal %}
+        {% set d = par.duplicata %}
+
+        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+
+          {# --- Por que o sistema suspeitou --- #}
+          <div class="flex items-center gap-2 border-b border-slate-100 px-3 py-2
+                      {% if par.motivo == 'telefone' %}bg-amber-50{% else %}bg-slate-50{% endif %}">
+            <span class="{% if par.motivo == 'telefone' %}text-amber-600{% else %}text-slate-400{% endif %}">
+              {{ ic.icone('telefone' if par.motivo == 'telefone' else 'pessoa', 'w-4 h-4') }}
+            </span>
+            <p class="text-[12px] font-semibold
+                      {% if par.motivo == 'telefone' %}text-amber-800{% else %}text-slate-600{% endif %}">
+              {{ par.explicacao }}
+            </p>
+            {% if par.motivo == 'telefone' %}
+              <p class="ml-auto text-[11px] text-amber-700">
+                Sinal forte — mas mãe e filho às vezes dividem o celular.
+              </p>
+            {% endif %}
+          </div>
+
+          {# --- As duas fichas, lado a lado --- #}
+          <div class="grid gap-px bg-slate-200 sm:grid-cols-2">
+
+            {% for alma, papel in [(p, 'principal'), (d, 'duplicata')] %}
+              <div class="bg-white p-3">
+                <div class="flex items-start gap-2">
+                  <span class="mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide
+                               {% if papel == 'principal' %}bg-green-50 text-semaforo-verde
+                               {% else %}bg-red-50 text-semaforo-vermelho{% endif %}">
+                    {{ 'fica' if papel == 'principal' else 'some do painel' }}
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-[13px] font-semibold text-slate-900">
+                      {{ alma.nome_completo }}
+                    </p>
+                    <p class="text-[11px] text-slate-400">
+                      {{ alma.codigo_formatado }} &middot; cadastrada em
+                      {{ tempo.formatar_data(alma.criado_em) }}
+                    </p>
+                  </div>
+                </div>
+
+                <dl class="mt-2 space-y-1 text-[11px]">
+                  {% set campos = [
+                    ('Telefone', alma.telefone|telefone),
+                    ('Nascimento', tempo.formatar_data(alma.data_nascimento)),
+                    ('Departamento', alma.departamento_rotulo),
+                    ('Responsável', alma.responsavel_atual.nome if alma.responsavel_atual else '—'),
+                    ('Cadastrada por', alma.cadastrante_nome),
+                    ('Contatos', alma.contatos|length),
+                    ('Presenças', alma.presencas|length)
+                  ] %}
+                  {% for rotulo, valor in campos %}
+                    <div class="flex gap-2">
+                      <dt class="w-24 shrink-0 text-slate-400">{{ rotulo }}</dt>
+                      <dd class="min-w-0 flex-1 truncate text-slate-700">{{ valor }}</dd>
+                    </div>
+                  {% endfor %}
+                </dl>
+              </div>
+            {% endfor %}
+          </div>
+
+          {# --- O que vai acontecer, dito antes do clique --- #}
+          <div class="border-t border-slate-100 bg-slate-50 px-3 py-2.5">
+            <p class="text-[11px] leading-relaxed text-slate-600">
+              <strong>Ao mesclar:</strong>
+              os contatos, presenças e o histórico de
+              <strong>{{ d.codigo_formatado }}</strong> passam para
+              <strong>{{ p.codigo_formatado }}</strong>, e os campos vazios da
+              ficha que fica são completados com os da outra.
+              <strong>Nada é apagado</strong> — {{ d.codigo_formatado }}
+              apenas sai do painel.
+            </p>
+
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <form method="POST" action="{{ url_for('admin.mesclar') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="principal_id" value="{{ p.id }}">
+                <input type="hidden" name="duplicata_id" value="{{ d.id }}">
+                <button type="submit"
+                        class="flex items-center gap-1.5 rounded-md bg-marca px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-marca-claro">
+                  {{ ic.icone('check', 'w-3.5 h-3.5') }}
+                  Mesclar {{ d.codigo_formatado }} em {{ p.codigo_formatado }}
+                </button>
+              </form>
+
+              {# O caminho inverso: se a mais NOVA for a ficha boa (mais
+                 completa, por exemplo), o Admin escolhe o outro sentido. #}
+              <form method="POST" action="{{ url_for('admin.mesclar') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="principal_id" value="{{ d.id }}">
+                <input type="hidden" name="duplicata_id" value="{{ p.id }}">
+                <button type="submit"
+                        class="rounded-md border border-slate-300 px-3 py-1.5 text-[12px] font-medium text-slate-600 transition hover:bg-white">
+                  Inverter — manter {{ d.codigo_formatado }}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+  {% else %}
+    {# --- Estado vazio desenhado (secao 6) --- #}
+    <div class="rounded-xl border-2 border-dashed border-slate-200 bg-white px-6 py-12 text-center">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-50 text-semaforo-verde">
+        {{ ic.icone('em-dia', 'w-7 h-7') }}
+      </div>
+      <h2 class="mt-4 text-sm font-bold text-slate-800">Nenhum repetido à vista</h2>
+      <p class="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-slate-500">
+        O sistema não encontrou fichas com o mesmo telefone nem com nomes
+        muito parecidos.
+        {% if ja_mescladas %}
+          <br>{{ ja_mescladas }} registro(s) já foram mesclados antes.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+
+  {# =====================================================================
+     COMO O SISTEMA PROCURA
+  ===================================================================== #}
+  <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+      Como o sistema procura
+    </p>
+    <ul class="mt-1.5 space-y-1 text-[11px] leading-relaxed text-slate-600">
+      <li><strong>Telefone igual</strong> — sinal forte. Duas pessoas com o mesmo número quase sempre são a mesma.</li>
+      <li><strong>Nome parecido</strong> — sinal fraco. "Maria Aparecida Silva" e "Maria Aparecida da Silva" casam; "Maria" e "Mario" não.</li>
+      <li>O sistema <strong>nunca junta sozinho</strong>. Ele sugere, e você confirma.</li>
+      <li>A ficha mesclada <strong>nunca é apagada</strong> — se for engano, os dados continuam lá.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

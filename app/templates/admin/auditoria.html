@@ -1,0 +1,185 @@
+{# ===========================================================================
+   admin/auditoria.html - A CAIXA-PRETA (secao 7, item 13). SO ADMIN.
+
+   ESTA TELA E SO DE LEITURA, e isso nao e um detalhe de implementacao.
+   Um log que pode ser editado nao serve para nada: a primeira coisa que
+   alguem faria ao errar seria apagar o proprio rastro. Por isso nao existe
+   botao de editar nem de excluir aqui - nem rota para isso em lugar nenhum
+   do sistema.
+=========================================================================== #}
+{% extends "base.html" %}
+{% import "_icones.html" as ic %}
+
+{% block titulo %}Auditoria{% endblock %}
+
+{% block conteudo %}
+<div class="mx-auto max-w-6xl px-3 py-4 sm:px-4">
+
+  {# =====================================================================
+     CABECALHO
+  ===================================================================== #}
+  <div class="mb-3">
+    <h1 class="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-900">
+      {{ ic.icone('chave', 'w-5 h-5 text-slate-400') }} Auditoria
+    </h1>
+    <p class="mt-0.5 text-[12px] leading-relaxed text-slate-500">
+      Quem fez o quê, quando e de onde. Esta tela é <strong>somente de
+      leitura</strong> — nada aqui pode ser editado ou apagado, nem por você.
+    </p>
+  </div>
+
+  {# =====================================================================
+     FILTROS
+  ===================================================================== #}
+  <form method="GET" action="{{ url_for('admin.registro_auditoria') }}"
+        class="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5">
+
+    <select name="acao"
+            class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-700 outline-none focus:border-marca">
+      <option value="">Todas as ações</option>
+      {% for a in acoes_existentes %}
+        <option value="{{ a }}" {{ 'selected' if filtros.acao == a }}>
+          {{ a.replace('_', ' ') }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <select name="usuario"
+            class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-700 outline-none focus:border-marca">
+      <option value="">Todos os usuários</option>
+      {% for u in usuarios %}
+        <option value="{{ u.id }}" {{ 'selected' if filtros.usuario == u.id }}>{{ u.nome }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="dias"
+            class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-700 outline-none focus:border-marca">
+      {% for valor, texto in [('7','Últimos 7 dias'), ('30','Últimos 30 dias'),
+                              ('90','Últimos 90 dias'), ('365','Último ano'),
+                              ('tudo','Desde o começo')] %}
+        <option value="{{ valor }}" {{ 'selected' if filtros.dias == valor }}>{{ texto }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit"
+            class="flex items-center gap-1.5 rounded-md bg-marca px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-marca-claro">
+      {{ ic.icone('filtro', 'w-3.5 h-3.5') }} Filtrar
+    </button>
+
+    <span class="ml-auto text-[12px] text-slate-500">
+      {{ total }} registro(s)
+    </span>
+  </form>
+
+  {# =====================================================================
+     A LISTA
+  ===================================================================== #}
+  {% if linhas %}
+    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+
+      {# Cabecalho - so no computador #}
+      <div class="hidden border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400
+                  lg:grid lg:items-center lg:gap-3 lg:grid-cols-[9.5rem_11rem_10rem_minmax(0,1fr)_7rem]">
+        <span>Quando</span>
+        <span>Ação</span>
+        <span>Quem</span>
+        <span>Detalhe</span>
+        <span>De onde</span>
+      </div>
+
+      <div class="divide-y divide-slate-100">
+        {% for l in linhas %}
+          {# As acoes de risco ganham destaque: sao as que um auditor procura
+             primeiro quando algo deu errado. #}
+          {% set critica = l.acao in ['acesso_negado', 'login_falhou', 'exportacao_excel',
+                                      'leitura_observacao_sensivel', 'mesclagem',
+                                      'usuario_desativado', 'senha_redefinida'] %}
+
+          <div class="grid gap-3 px-3 py-2 text-[12px]
+                      grid-cols-1
+                      lg:grid-cols-[9.5rem_11rem_10rem_minmax(0,1fr)_7rem] lg:items-center
+                      {% if critica %}bg-amber-50/40{% endif %}">
+
+            <span class="tabular-nums text-slate-500">
+              {{ tempo.formatar_data_hora(l.criado_em) }}
+            </span>
+
+            <span>
+              <span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide
+                           {% if l.acao in ['acesso_negado', 'login_falhou'] %}bg-red-50 text-semaforo-vermelho
+                           {% elif critica %}bg-amber-100 text-amber-800
+                           {% else %}bg-slate-100 text-slate-500{% endif %}">
+                {{ l.acao.replace('_', ' ') }}
+              </span>
+            </span>
+
+            <span class="truncate text-slate-700">
+              {% if l.usuario %}{{ l.usuario.nome }}
+              {% else %}<span class="text-slate-400">— sem login —</span>{% endif %}
+            </span>
+
+            {# O detalhe passa pelo autoescape do Jinja: se alguem cadastrar
+               um nome com <script>, ele aparece como texto aqui (secao 7,
+               item 5). #}
+            <span class="min-w-0 break-words text-slate-600">{{ l.detalhe or '—' }}</span>
+
+            <span class="tabular-nums text-[11px] text-slate-400">{{ l.ip or '—' }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# --- Paginacao --- #}
+    {% if total_paginas > 1 %}
+      <div class="mt-3 flex items-center justify-between">
+        {% if pagina > 1 %}
+          <a href="{{ url_for('admin.registro_auditoria', pagina=pagina-1, **filtros) }}"
+             class="flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-[12px] font-medium text-slate-600 transition hover:bg-white">
+            {{ ic.icone('seta-esquerda', 'w-3.5 h-3.5') }} Anteriores
+          </a>
+        {% else %}<span></span>{% endif %}
+
+        <span class="text-[12px] text-slate-500">
+          Página {{ pagina }} de {{ total_paginas }}
+        </span>
+
+        {% if pagina < total_paginas %}
+          <a href="{{ url_for('admin.registro_auditoria', pagina=pagina+1, **filtros) }}"
+             class="flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-[12px] font-medium text-slate-600 transition hover:bg-white">
+            Próximas {{ ic.icone('seta-direita', 'w-3.5 h-3.5') }}
+          </a>
+        {% else %}<span></span>{% endif %}
+      </div>
+    {% endif %}
+
+  {% else %}
+    <div class="rounded-xl border-2 border-dashed border-slate-200 bg-white px-6 py-12 text-center">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+        {{ ic.icone('busca', 'w-7 h-7') }}
+      </div>
+      <h2 class="mt-4 text-sm font-bold text-slate-800">Nada neste filtro</h2>
+      <p class="mt-1.5 text-[13px] text-slate-500">Tente um período maior ou outra ação.</p>
+    </div>
+  {% endif %}
+
+  {# =====================================================================
+     O QUE O SISTEMA REGISTRA
+  ===================================================================== #}
+  <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+      O que fica registrado
+    </p>
+    <p class="mt-1.5 text-[11px] leading-relaxed text-slate-600">
+      Entrada e saída do sistema (inclusive tentativas com senha errada),
+      designação e transferência de responsável, mudança de status,
+      registro de contato e presença, mesclagem de duplicados,
+      <strong>leitura de observação sensível</strong>, exportação de planilha,
+      criação e desativação de usuários, e toda tentativa de acessar algo sem
+      permissão.
+    </p>
+    <p class="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+      As linhas em amarelo são as que um auditor procura primeiro.
+    </p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,357 @@
+{# ===========================================================================
+   painel/index.html - O PAINEL (secao 5.2).
+
+   Tudo numa pagina so, de cima para baixo:
+     1. Faixa roxa das almas sem responsavel (so Admin)
+     2. Cartoes de KPI
+     3. Busca e filtros
+     4. Lista de almas em linhas, coloridas pelo semaforo
+
+   Compacto de proposito: cada pixel economizado e uma alma a mais visivel
+   sem rolar a tela.
+=========================================================================== #}
+{% extends "base.html" %}
+{% import "_icones.html" as ic %}
+
+{% block titulo %}Painel{% endblock %}
+
+{% block conteudo %}
+{# x-data liga a pagina inteira ao componente definido em static/js/app.js.
+   E ele que busca a ficha no servidor e faz o painel lateral deslizar. #}
+<div x-data="painelDeAlmas('{{ request.args.get('ficha', '')|e }}')"
+     class="mx-auto max-w-7xl px-3 py-4 sm:px-4">
+
+  {# =====================================================================
+     1. FAIXA ROXA - so o Admin ve (secao 5.2)
+  ===================================================================== #}
+  {% if current_user.eh_admin and aguardando %}
+    <a href="{{ url_for('painel.index', status='aguardando_responsavel') }}"
+       class="mb-3 flex items-center gap-2.5 rounded-lg border border-semaforo-roxo/30 bg-semaforo-roxo/5 px-3 py-2.5 transition hover:bg-semaforo-roxo/10">
+      <span class="text-semaforo-roxo">{{ ic.icone('alerta', 'w-5 h-5') }}</span>
+      <p class="flex-1 text-[13px] font-semibold text-semaforo-roxo">
+        {{ aguardando|length }}
+        {{ 'alma aguardando responsável' if aguardando|length == 1 else 'almas aguardando responsável' }}
+        {% if dias_mais_antiga is not none %}
+          <span class="font-normal text-slate-500">
+            &mdash; a mais antiga
+            {% if dias_mais_antiga == 0 %}foi cadastrada hoje
+            {% elif dias_mais_antiga == 1 %}há 1 dia
+            {% else %}há {{ dias_mais_antiga }} dias{% endif %}
+          </span>
+        {% endif %}
+      </p>
+      <span class="text-semaforo-roxo">{{ ic.icone('seta-direita', 'w-4 h-4') }}</span>
+    </a>
+  {% endif %}
+
+  {# =====================================================================
+     2. CARTOES DE KPI
+     Cada um e clicavel e aplica o filtro de cor correspondente.
+  ===================================================================== #}
+  {# Cada cartao: rotulo, numero, filtro de cor que ele aplica, icone,
+     cor do texto e cor do fundo do icone. #}
+  {% set kpis = [
+    ('Em acompanhamento', contagem.em_acompanhamento, '',         'acompanhamento', 'text-slate-700',            'bg-slate-100 text-slate-500'),
+    ('Em dia',            contagem.verde,             'verde',    'em-dia',         'text-semaforo-verde',       'bg-green-50 text-semaforo-verde'),
+    ('Em atenção',        contagem.atencao,           'amarelo',  'atencao',        'text-semaforo-amarelo',     'bg-amber-50 text-semaforo-amarelo'),
+    ('Críticas',          contagem.vermelho,          'vermelho', 'critica',        'text-semaforo-vermelho',    'bg-red-50 text-semaforo-vermelho'),
+    ('Integradas no mês', integradas_no_mes,          '',         'integrada',      'text-slate-700',            'bg-slate-100 text-slate-500')
+  ] %}
+
+  <div class="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+    {% for rotulo, valor, filtro_cor, icone_nome, cor_texto, cor_icone in kpis %}
+      <a href="{{ url_for('painel.index', cor=filtro_cor) if filtro_cor else url_for('painel.index') }}"
+         class="flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 transition hover:border-slate-300 hover:shadow-sm
+                {% if filtros.cor and filtros.cor == filtro_cor %}ring-2 ring-marca/30{% endif %}">
+
+        {# O icone num quadradinho da cor do status. Da para reconhecer o
+           cartao de relance, sem ler - que e o ponto de um painel. #}
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg {{ cor_icone }}">
+          {{ ic.icone(icone_nome, 'w-4 h-4') }}
+        </span>
+
+        <span class="min-w-0">
+          <span class="block text-xl font-bold leading-none {{ cor_texto }}">{{ valor }}</span>
+          <span class="mt-0.5 block truncate text-[11px] leading-tight text-slate-500">{{ rotulo }}</span>
+        </span>
+      </a>
+    {% endfor %}
+  </div>
+
+  {# =====================================================================
+     3. BUSCA E FILTROS
+     Tudo num formulario GET: os filtros viram parte da URL, entao a pessoa
+     pode salvar o link ou mandar no grupo do WhatsApp.
+  ===================================================================== #}
+  <form method="GET" action="{{ url_for('painel.index') }}"
+        class="mb-3 rounded-lg border border-slate-200 bg-white p-2.5"
+        x-data="{ maisFiltros: {{ 'true' if (filtros.departamento or filtros.trabalho or filtros.periodo or filtros.status) else 'false' }} }">
+
+    <div class="flex flex-wrap items-center gap-2">
+
+      {# --- Busca --- #}
+      <div class="relative min-w-0 flex-1">
+        <span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400">
+          {{ ic.icone('busca', 'w-4 h-4') }}
+        </span>
+        <input type="search" name="busca" value="{{ filtros.busca }}"
+               placeholder="Buscar por nome, telefone ou código..."
+               class="w-full rounded-md border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-[13px] outline-none transition focus:border-marca focus:ring-2 focus:ring-marca/20">
+      </div>
+
+      {# --- Responsável (só Admin) --- #}
+      {% if current_user.eh_admin %}
+        <select name="responsavel"
+                class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-700 outline-none focus:border-marca focus:ring-2 focus:ring-marca/20">
+          <option value="">Todos os responsáveis</option>
+          <option value="sem_responsavel" {{ 'selected' if filtros.responsavel == 'sem_responsavel' }}>
+            Sem responsável
+          </option>
+          {% for r in responsaveis %}
+            <option value="{{ r.id }}" {{ 'selected' if filtros.responsavel == r.id }}>
+              {{ r.nome }}
+            </option>
+          {% endfor %}
+        </select>
+      {% endif %}
+
+      {# --- Botão que revela os filtros extras --- #}
+      <button type="button" @click="maisFiltros = !maisFiltros"
+              class="flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1.5 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50">
+        {{ ic.icone('filtro', 'w-3.5 h-3.5') }} Filtros
+      </button>
+
+      <button type="submit"
+              class="flex items-center gap-1.5 rounded-md bg-marca px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-marca-claro">
+        {{ ic.icone('busca', 'w-3.5 h-3.5') }} Buscar
+      </button>
+
+      {% if tem_filtro %}
+        <a href="{{ url_for('painel.index') }}"
+           class="flex items-center gap-1 rounded-md px-2 py-1.5 text-[13px] text-slate-500 transition hover:bg-slate-50 hover:text-slate-700">
+          {{ ic.icone('x', 'w-3.5 h-3.5') }} Limpar
+        </a>
+      {% endif %}
+    </div>
+
+    {# --- Filtros extras, escondidos até clicar --- #}
+    <div x-show="maisFiltros" x-cloak class="mt-2.5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-2.5 sm:grid-cols-4">
+
+      <select name="departamento"
+              class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-700 outline-none focus:border-marca">
+        <option value="">Todos os departamentos</option>
+        {% for valor, texto in opcoes.escolhas(opcoes.DEPARTAMENTOS) %}
+          <option value="{{ valor }}" {{ 'selected' if filtros.departamento == valor }}>{{ texto }}</option>
+        {% endfor %}
+      </select>
+
+      <select name="trabalho"
+              class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-700 outline-none focus:border-marca">
+        <option value="">Todos os trabalhos</option>
+        {% for valor, texto in opcoes.escolhas(opcoes.TRABALHOS) %}
+          <option value="{{ valor }}" {{ 'selected' if filtros.trabalho == valor }}>{{ texto }}</option>
+        {% endfor %}
+      </select>
+
+      <select name="status"
+              class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-700 outline-none focus:border-marca">
+        <option value="">Ativas (padrão)</option>
+        <option value="todos" {{ 'selected' if filtros.status == 'todos' }}>Todos os status</option>
+        {% for valor, texto in opcoes.escolhas(opcoes.STATUS_CICLO) %}
+          <option value="{{ valor }}" {{ 'selected' if filtros.status == valor }}>{{ texto }}</option>
+        {% endfor %}
+      </select>
+
+      <select name="periodo"
+              class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-700 outline-none focus:border-marca">
+        <option value="">Qualquer período</option>
+        <option value="7"   {{ 'selected' if filtros.periodo == '7' }}>Últimos 7 dias</option>
+        <option value="30"  {{ 'selected' if filtros.periodo == '30' }}>Últimos 30 dias</option>
+        <option value="90"  {{ 'selected' if filtros.periodo == '90' }}>Últimos 90 dias</option>
+        <option value="365" {{ 'selected' if filtros.periodo == '365' }}>Último ano</option>
+      </select>
+    </div>
+
+    {# Mantém o filtro de cor ao usar a busca, senão ele se perderia. #}
+    {% if filtros.cor %}
+      <input type="hidden" name="cor" value="{{ filtros.cor }}">
+    {% endif %}
+  </form>
+
+  {# =====================================================================
+     4. A LISTA DE ALMAS
+  ===================================================================== #}
+  {% if pares %}
+    <p class="mb-2 text-[11px] text-slate-400">
+      {{ pares|length }} {{ 'alma' if pares|length == 1 else 'almas' }}
+      {% if tem_filtro %}com os filtros aplicados{% endif %}
+    </p>
+
+    {# ---------------------------------------------------------------
+       A LISTA
+       Um quadro unico com as almas em linhas, separadas por um fio fino
+       (divide-y). Cabe muito mais gente do que na grade de cards, e as
+       colunas alinhadas deixam comparar de relance quem esta pior.
+    --------------------------------------------------------------- #}
+    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+
+      {# Cabecalho das colunas - so no computador, onde elas existem.
+         A receita de colunas abaixo e EXATAMENTE a mesma de _linha.html.
+         Se uma mudar e a outra nao, a tabela desalinha. #}
+      <div class="hidden border-b border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400
+                  md:grid md:items-center md:gap-2.5
+                  {% if current_user.eh_admin %}
+                    md:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_7rem_9rem_9.5rem]
+                  {% else %}
+                    md:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_7rem_9rem]
+                  {% endif %}">
+        <span></span>
+        <span></span>
+        <span>Nome</span>
+        <span>Departamento</span>
+        <span>Responsável</span>
+        <span>Último contato</span>
+        {% if current_user.eh_admin %}<span></span>{% endif %}
+      </div>
+
+      {# divide-y desenha um fio entre uma linha e outra #}
+      <div class="divide-y divide-slate-100">
+        {% for alma, s in pares %}
+          {% include "painel/_linha.html" %}
+        {% endfor %}
+      </div>
+    </div>
+
+  {% else %}
+    {# =================================================================
+       ESTADO VAZIO DESENHADO (secao 6: nunca uma tela em branco)
+       O texto muda conforme o motivo do vazio - e a diferenca entre
+       "o sistema quebrou?" e "entendi o que aconteceu".
+    ================================================================= #}
+    <div class="rounded-xl border-2 border-dashed border-slate-200 bg-white px-6 py-12 text-center">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+        {{ ic.icone('busca' if tem_filtro else 'pessoa', 'w-7 h-7') }}
+      </div>
+
+      <h2 class="mt-4 text-sm font-bold text-slate-800">
+        {% if tem_filtro %}
+          Nenhuma alma com esses filtros
+        {% elif current_user.eh_admin %}
+          Nenhuma alma cadastrada ainda
+        {% else %}
+          Nenhuma alma designada a você
+        {% endif %}
+      </h2>
+
+      <p class="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-slate-500">
+        {% if tem_filtro %}
+          Tente afrouxar a busca ou limpar os filtros.
+        {% elif current_user.eh_admin %}
+          Compartilhe o link público de cadastro com a igreja. Assim que
+          alguém aceitar Jesus, o registro aparece aqui.
+        {% else %}
+          Quando o administrador designar uma alma para o seu acompanhamento,
+          ela aparece nesta tela.
+        {% endif %}
+      </p>
+
+      {% if tem_filtro %}
+        <a href="{{ url_for('painel.index') }}"
+           class="mt-5 inline-flex items-center gap-1.5 rounded-md bg-marca px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-marca-claro">
+          {{ ic.icone('x', 'w-3.5 h-3.5') }} Limpar filtros
+        </a>
+      {% elif current_user.eh_admin %}
+        {# Em ABA NOVA, pelo mesmo motivo do botao da barra: o formulario
+           publico nao tem menu nem botao de voltar (secao 5.1). Se abrisse
+           aqui, a pessoa ficaria presa nele. #}
+        <a href="{{ url_for('publico.cadastro', token=config.CADASTRO_TOKEN) }}"
+           target="_blank" rel="noopener noreferrer"
+           class="mt-5 inline-flex items-center gap-1.5 rounded-md bg-chama px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-chama-claro">
+          {{ ic.icone('novo-convertido', 'w-3.5 h-3.5') }} Abrir o formulário
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+               stroke-width="2" stroke="currentColor" class="h-3 w-3 opacity-70">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+          </svg>
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# =====================================================================
+     LEGENDA DO SEMAFORO
+     Pequena, no rodapé: quem já sabe ignora, quem é novo consulta.
+  ===================================================================== #}
+  {% if pares %}
+    <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-200 pt-3 text-[11px] text-slate-400">
+      <span class="font-semibold uppercase tracking-wide">Legenda</span>
+      {% for cor, texto in [('verde','0 a 7 dias'), ('amarelo','8 a 14'), ('laranja','15 a 21'), ('vermelho','22+'), ('roxo','sem responsável')] %}
+        <span class="flex items-center gap-1.5">
+          <span class="h-2 w-2 rounded-full" style="background-color: {{ config.CORES_SEMAFORO[cor] }}"></span>
+          {{ texto }}
+        </span>
+      {% endfor %}
+      <span class="flex items-center gap-1.5">
+        {{ ic.icone('sem-contato', 'w-3 h-3') }} responsável não tentou
+      </span>
+      <span class="flex items-center gap-1.5">
+        {{ ic.icone('sem-resposta', 'w-3 h-3') }} a alma não responde
+      </span>
+    </div>
+  {% endif %}
+
+  {# =====================================================================
+     A FICHA LATERAL (drawer) - secao 5.3
+
+     Fica sempre no HTML, mas vazia e escondida. Ao clicar num nome, o
+     JavaScript busca o conteudo no servidor e o encaixa aqui dentro.
+
+     POR QUE NAO CARREGAR TUDO DE UMA VEZ?
+     Com 300 almas, trazer os contatos de todas encheria a pagina de
+     milhares de registros que ninguem vai olhar. Buscamos so o que foi
+     pedido, no momento em que foi pedido.
+  ===================================================================== #}
+
+  {# --- Fundo escurecido. Clicar nele fecha a ficha. --- #}
+  <div x-show="fichaAberta" x-cloak
+       @click="fechar()"
+       class="fixed inset-0 z-40 bg-slate-900/40"
+       aria-hidden="true"></div>
+
+  {# --- O painel que desliza pela direita --- #}
+  <aside x-show="fichaAberta" x-cloak
+         @keydown.escape.window="fechar()"
+         class="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-hidden bg-white shadow-2xl transition-transform duration-200"
+         :class="fichaAberta ? 'translate-x-0' : 'translate-x-full'"
+         role="dialog" aria-modal="true">
+
+    {# Enquanto o servidor responde #}
+    <div x-show="carregando" class="flex h-full items-center justify-center">
+      <div class="text-center">
+        <span class="mx-auto block h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-marca"></span>
+        <p class="mt-3 text-[12px] text-slate-400">Carregando a ficha...</p>
+      </div>
+    </div>
+
+    {# Se algo deu errado #}
+    <div x-show="erro" x-cloak class="flex h-full items-center justify-center px-6">
+      <div class="text-center">
+        <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-semaforo-vermelho">
+          {{ ic.icone('alerta', 'w-6 h-6') }}
+        </span>
+        <p class="mt-3 text-[13px] font-semibold text-slate-700" x-text="erro"></p>
+        <button type="button" @click="fechar()"
+                class="mt-4 rounded-md bg-marca px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-marca-claro">
+          Fechar
+        </button>
+      </div>
+    </div>
+
+    {# O conteudo vindo do servidor.
+       x-html injeta o HTML que a rota /alma/<id>/ficha devolveu.
+       E seguro porque esse HTML foi gerado pelo NOSSO Jinja, com autoescape
+       ligado - nao e texto digitado por usuario sendo interpretado. #}
+    <div x-show="!carregando && !erro" x-html="conteudo" class="h-full"></div>
+  </aside>
+</div>
+{% endblock %}

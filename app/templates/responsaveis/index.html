@@ -1,0 +1,270 @@
+{# ===========================================================================
+   responsaveis/index.html - A EQUIPE (secao 5.4). SO ADMIN.
+
+   Duas partes:
+     1. A SENHA SORTEADA, quando acaba de criar ou redefinir alguem
+     2. A TABELA DE CARGA - quem esta sobrecarregado, quem esta deixando
+        alma para tras
+=========================================================================== #}
+{% extends "base.html" %}
+{% import "_icones.html" as ic %}
+{% import "_macros.html" as ui %}
+
+{% block titulo %}Responsáveis{% endblock %}
+
+{% block conteudo %}
+<div x-data="{ formAberto: false }" class="mx-auto max-w-7xl px-3 py-4 sm:px-4">
+
+  {# =====================================================================
+     A SENHA SORTEADA
+     Aparece UMA vez, logo depois de criar ou redefinir. No banco existe
+     apenas o hash - nem o sistema consegue mostrar de novo.
+  ===================================================================== #}
+  {% if senha_nova %}
+    <div x-data="fichaDaAlma()"
+         class="mb-3 rounded-lg border-2 border-green-300 bg-green-50 p-4">
+      <h2 class="flex items-center gap-1.5 text-[13px] font-bold text-green-900">
+        {{ ic.icone('chave', 'w-4 h-4') }} Senha de primeiro acesso
+      </h2>
+
+      <p class="mt-1 text-[12px] leading-relaxed text-green-800">
+        Anote ou copie agora e entregue a <strong>{{ login_novo }}</strong>.
+        Esta senha <strong>não pode ser vista de novo</strong> — no banco fica
+        só um código irreversível. Se perder, sorteie outra.
+      </p>
+
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <input readonly x-ref="senha" value="{{ senha_nova }}"
+               class="w-44 rounded-lg border border-green-300 bg-white px-3 py-2 text-center font-mono text-base font-bold tracking-wider text-green-900">
+
+        <button type="button" @click="copiarTexto($refs.senha)"
+                class="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-[12px] font-bold text-white transition hover:bg-green-700">
+          {{ ic.icone('copiar', 'w-4 h-4') }}
+          <span x-text="textoCopiado ? 'Copiado!' : 'Copiar'"></span>
+        </button>
+
+        <a href="{{ url_for('responsaveis.index') }}"
+           class="rounded-lg px-3 py-2 text-[12px] text-green-800 underline underline-offset-2 transition hover:text-green-900">
+          Já anotei, pode esconder
+        </a>
+      </div>
+
+      <p class="mt-2.5 text-[11px] text-green-700">
+        No primeiro login o sistema obriga a pessoa a criar uma senha própria.
+      </p>
+    </div>
+  {% endif %}
+
+  {# =====================================================================
+     CABECALHO
+  ===================================================================== #}
+  <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <div>
+      <h1 class="text-lg font-bold tracking-tight text-slate-900">Responsáveis</h1>
+      <p class="text-[12px] text-slate-500">
+        {{ total_ativos }} com acesso ativo &middot; {{ carga|length }} no total
+      </p>
+    </div>
+
+    <button type="button" @click="formAberto = !formAberto"
+            class="flex items-center gap-1.5 rounded-lg bg-marca px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-marca-claro">
+      {{ ic.icone('mais', 'w-4 h-4') }} Novo usuário
+    </button>
+  </div>
+
+  {# =====================================================================
+     FORMULARIO DE CRIACAO
+  ===================================================================== #}
+  <div x-show="formAberto" x-cloak
+       class="mb-3 rounded-lg border border-slate-200 bg-white p-4">
+    <form method="POST" action="{{ url_for('responsaveis.criar') }}" class="space-y-3" novalidate>
+      {{ form.hidden_tag() }}
+
+      <div class="flex items-center justify-between">
+        <h2 class="text-[13px] font-bold text-slate-800">Criar usuário</h2>
+        <button type="button" @click="formAberto = false"
+                class="rounded p-1 text-slate-400 transition hover:bg-slate-100">
+          {{ ic.icone('x', 'w-4 h-4') }}
+        </button>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-3">
+        {{ ui.campo(form.nome, obrigatorio=True) }}
+        {{ ui.campo(form.login, obrigatorio=True,
+                    dica='Sem espaço e sem acento.') }}
+        {{ ui.campo(form.telefone) }}
+      </div>
+
+      {{ ui.cartoes(form.papel, colunas=2, obrigatorio=True) }}
+
+      {# O aviso mais importante deste formulário #}
+      <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+        <p class="text-[11px] leading-relaxed text-amber-800">
+          <strong>A senha é sorteada pelo sistema</strong> e aparece uma única
+          vez na próxima tela. Senha escolhida à mão vira "igreja123" para
+          todo mundo — sorteada, cada pessoa recebe a sua.
+        </p>
+      </div>
+
+      <button type="submit"
+              class="w-full rounded-lg bg-marca px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-marca-claro sm:w-auto">
+        Criar e sortear a senha
+      </button>
+    </form>
+  </div>
+
+  {# =====================================================================
+     A TABELA DE CARGA (secao 5.4)
+  ===================================================================== #}
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+
+    {# Cabecalho - so no computador #}
+    <div class="hidden border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400
+                lg:grid lg:items-center lg:gap-3 lg:grid-cols-[minmax(0,1fr)_4rem_7rem_5rem_6rem_10rem]">
+      <span>Pessoa</span>
+      <span class="text-center">Almas</span>
+      <span class="text-center">Em dia</span>
+      <span class="text-center">Críticas</span>
+      <span class="text-center" title="Média de dias entre um contato e outro">Ritmo</span>
+      <span class="text-right">Ações</span>
+    </div>
+
+    <div class="divide-y divide-slate-100">
+      {% for c in carga %}
+        {% set u = c.usuario %}
+        <div class="grid items-center gap-3 px-3 py-2.5
+                    grid-cols-[minmax(0,1fr)_auto]
+                    lg:grid-cols-[minmax(0,1fr)_4rem_7rem_5rem_6rem_10rem]
+                    {% if not u.ativo %}bg-slate-50/70{% endif %}">
+
+          {# --- PESSOA --- #}
+          <div class="flex min-w-0 items-center gap-2.5">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-white
+                         {% if not u.ativo %}bg-slate-300
+                         {% elif u.eh_admin %}bg-chama
+                         {% else %}bg-marca{% endif %}">
+              {{ u.nome[:1]|upper }}
+            </span>
+            <div class="min-w-0">
+              <p class="truncate text-[13px] font-semibold text-slate-900">
+                {{ u.nome }}
+                {% if u.id == current_user.id %}
+                  <span class="text-[10px] font-normal text-slate-400">(você)</span>
+                {% endif %}
+              </p>
+              <p class="truncate text-[11px] text-slate-400">
+                {{ u.login }} &middot; {{ u.papel_rotulo }}
+                {% if not u.ativo %}
+                  &middot; <span class="font-semibold text-semaforo-vermelho">sem acesso</span>
+                {% endif %}
+                {# No celular, os números vêm para cá #}
+                <span class="lg:hidden">
+                  &middot; {{ c.almas }} alma{{ '' if c.almas == 1 else 's' }}
+                  {% if c.criticas %}
+                    &middot; <span class="font-semibold text-semaforo-vermelho">{{ c.criticas }} crítica{{ '' if c.criticas == 1 else 's' }}</span>
+                  {% endif %}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {# --- ALMAS --- #}
+          <div class="hidden text-center lg:block">
+            <span class="text-[15px] font-bold text-slate-800">{{ c.almas }}</span>
+          </div>
+
+          {# --- EM DIA (barra de porcentagem) --- #}
+          <div class="hidden lg:block">
+            {% if c.percentual is not none %}
+              <div class="flex items-center gap-1.5">
+                <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+                  <div class="h-full rounded-full
+                              {% if c.percentual >= 70 %}bg-semaforo-verde
+                              {% elif c.percentual >= 40 %}bg-semaforo-amarelo
+                              {% else %}bg-semaforo-vermelho{% endif %}"
+                       style="width: {{ c.percentual }}%"></div>
+                </div>
+                <span class="w-8 shrink-0 text-right text-[11px] font-semibold text-slate-600">
+                  {{ c.percentual }}%
+                </span>
+              </div>
+            {% else %}
+              <span class="block text-center text-[11px] text-slate-300">—</span>
+            {% endif %}
+          </div>
+
+          {# --- CRITICAS --- #}
+          <div class="hidden text-center lg:block">
+            {% if c.criticas %}
+              <span class="inline-block rounded bg-red-50 px-2 py-0.5 text-[12px] font-bold text-semaforo-vermelho">
+                {{ c.criticas }}
+              </span>
+            {% else %}
+              <span class="text-[11px] text-slate-300">—</span>
+            {% endif %}
+          </div>
+
+          {# --- RITMO --- #}
+          <div class="hidden text-center lg:block" title="Média de dias entre um contato e outro">
+            {% if c.dias_medios is not none %}
+              <span class="text-[12px] text-slate-600">{{ c.dias_medios }}d</span>
+            {% else %}
+              <span class="text-[11px] text-slate-300">—</span>
+            {% endif %}
+          </div>
+
+          {# --- ACOES --- #}
+          <div class="flex items-center justify-end gap-1">
+            {# Ver as almas dessa pessoa no painel #}
+            {% if c.almas %}
+              <a href="{{ url_for('painel.index', responsavel=u.id) }}"
+                 class="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-marca"
+                 title="Ver as almas de {{ u.primeiro_nome }}">
+                {{ ic.icone('painel', 'w-4 h-4') }}
+              </a>
+            {% endif %}
+
+            {# Redefinir senha #}
+            <form method="POST" action="{{ url_for('responsaveis.redefinir_senha', usuario_id=u.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                      class="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-marca"
+                      title="Sortear uma senha nova para {{ u.primeiro_nome }}">
+                {{ ic.icone('chave', 'w-4 h-4') }}
+              </button>
+            </form>
+
+            {# Ativar / desativar. Não aparece para você mesmo: um Admin que
+               se desativasse trancaria a si próprio para fora. #}
+            {% if u.id != current_user.id %}
+              <form method="POST" action="{{ url_for('responsaveis.alternar_ativo', usuario_id=u.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                        class="rounded-md p-1.5 transition
+                               {% if u.ativo %}text-slate-400 hover:bg-red-50 hover:text-semaforo-vermelho
+                               {% else %}text-semaforo-verde hover:bg-green-50{% endif %}"
+                        title="{{ 'Tirar o acesso de ' ~ u.primeiro_nome if u.ativo else 'Devolver o acesso a ' ~ u.primeiro_nome }}">
+                  {{ ic.icone('x' if u.ativo else 'check', 'w-4 h-4') }}
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# =====================================================================
+     COMO LER A TABELA
+  ===================================================================== #}
+  <div class="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Como ler</p>
+    <ul class="mt-1.5 space-y-1 text-[11px] leading-relaxed text-slate-600">
+      <li><strong>Em dia</strong> — a fatia das almas dessa pessoa que está no verde. Abaixo de 40% a barra fica vermelha.</li>
+      <li><strong>Críticas</strong> — almas no vermelho. Um número alto aqui pede conversa, não punição: pode ser excesso de carga.</li>
+      <li><strong>Ritmo</strong> — média de dias entre um contato e outro. Quanto menor, mais frequente o acompanhamento.</li>
+      <li><strong>Tirar o acesso</strong> nunca apaga a pessoa: o histórico de contatos dela continua inteiro.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

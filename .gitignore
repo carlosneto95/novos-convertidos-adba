@@ -1,0 +1,73 @@
+# ===========================================================================
+# .gitignore - o que o Git NUNCA deve enviar.
+#
+# ATENCAO A ESTA REGRA, que ja causou um bug grave neste arquivo:
+# no .gitignore, o "#" so inicia comentario NO COMECO DA LINHA.
+# Um comentario a direita vira PARTE DO PADRAO.
+#
+#   .env      # senhas          <- ERRADO: o padrao vira ".env      # senhas"
+#                                  e o .env acaba indo para o Git.
+#   # senhas                    <- CERTO: comentario em linha propria
+#   .env
+#
+# Por isso, daqui para baixo, todo comentario tem linha so dele.
+# ===========================================================================
+
+
+# --- SEGREDOS --------------------------------------------------------------
+# SECRET_KEY, token do formulario publico, senha do admin.
+# Se este arquivo vazar, o sistema inteiro vaza junto.
+.env
+.env.local
+*.env.local
+
+
+# --- BANCO DE DADOS E COPIAS -----------------------------------------------
+# Dados pessoais de pessoas reais (LGPD). Nunca versionar.
+instance/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+
+
+# --- AMBIENTE VIRTUAL PYTHON -----------------------------------------------
+venv/
+.venv/
+env/
+ENV/
+
+
+# --- TEMPORARIOS DO PYTHON -------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.coverage
+
+
+# --- EDITOR E SISTEMA OPERACIONAL ------------------------------------------
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
+
+
+# --- LOGS ------------------------------------------------------------------
+*.log
+
+
+# --- PLANILHAS EXPORTADAS --------------------------------------------------
+# A exportacao nasce na memoria e nao toca o disco, mas se alguem salvar
+# uma copia na pasta do projeto, ela nao pode ir para o Git: e a base
+# inteira de dados pessoais num arquivo so.
+*.xlsx
+
+
+# --- CAPTURAS DE TELA SOLTAS -----------------------------------------------
+# Prints que caem na pasta do projeto. Podem conter dados de pessoas na tela.
+Captura de tela*.png
+Screenshot*.png

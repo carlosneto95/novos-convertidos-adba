@@ -1,0 +1,66 @@
+{# ===========================================================================
+   429 - LIMITE DE ENVIOS ATINGIDO (secao 7, item 7).
+
+   A pagina que o Flask-Limiter mostra sozinho e crua, em ingles, e - pior -
+   REVELA O LIMITE EXATO ("5 per 1 hour"), entregando a um atacante o numero
+   que ele precisa saber para contornar a trava.
+
+   Esta pagina explica o que houve em portugues, diz o que fazer, e NAO conta
+   qual e o limite.
+=========================================================================== #}
+{% extends "base.html" %}
+{% import "_icones.html" as ic %}
+
+{% block titulo %}Muitos envios{% endblock %}
+{% block navbar %}{% endblock %}
+{% block rodape %}{% endblock %}
+
+{% block conteudo %}
+<div class="flex min-h-screen items-center justify-center px-4 py-12">
+  <div class="w-full max-w-md text-center">
+
+    <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+      {{ ic.icone('relogio', 'w-8 h-8') }}
+    </div>
+
+    <h1 class="mt-5 text-xl font-bold text-slate-900">
+      Muitos envios seguidos
+    </h1>
+
+    <p class="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-slate-600">
+      Por segurança, o sistema limita quantos cadastros podem sair do mesmo
+      lugar em pouco tempo. É o que impede um robô de encher o banco de dados
+      com registros falsos.
+    </p>
+
+    <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-left">
+      <p class="text-[13px] font-bold text-amber-900">O que fazer agora</p>
+      <ul class="mt-2 space-y-1.5 text-[12px] leading-relaxed text-amber-800">
+        <li>&bull; <strong>Aguarde alguns minutos</strong> e tente de novo.</li>
+        <li>&bull; Se vários irmãos estão cadastrando ao mesmo tempo pela rede
+            da igreja, peçam para <strong>revezar</strong> — a contagem é por
+            rede, não por pessoa.</li>
+        <li>&bull; Se for urgente, <strong>use os dados do celular</strong>
+            em vez do Wi-Fi da igreja.</li>
+      </ul>
+    </div>
+
+    {# --- O cadastro NAO se perdeu? ---
+       Aqui somos honestos: o cadastro NAO foi salvo. Dizer o contrario
+       faria a pessoa ir embora achando que estava tudo certo. #}
+    <p class="mt-4 text-[12px] leading-relaxed text-slate-500">
+      <strong>Este cadastro não foi salvo.</strong> Volte e envie de novo
+      daqui a pouco — os dados que você digitou ainda estão na página anterior.
+    </p>
+
+    <a href="javascript:history.back()"
+       class="mt-6 inline-flex items-center gap-1.5 rounded-lg bg-marca px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-marca-claro">
+      {{ ic.icone('seta-esquerda', 'w-4 h-4') }} Voltar ao formulário
+    </a>
+
+    <p class="mt-8 text-[11px] leading-relaxed text-slate-400">
+      Dúvidas: {{ config.IGREJA_TELEFONE }}
+    </p>
+  </div>
+</div>
+{% endblock %}
