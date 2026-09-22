@@ -1,0 +1,5 @@
+# Scripts .sh precisam de quebra de linha do LINUX (LF).
+# No Windows o Git converte para CRLF sozinho, e o bash do servidor
+# entao falha com erros confusos tipo "$: command not found".
+# Esta regra impede a conversao.
+*.sh text eol=lf
