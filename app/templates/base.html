@@ -176,6 +176,25 @@
   </footer>
   {% endblock %}
 
+  {# --- ONDE ESTE SISTEMA MORA DENTRO DO DOMINIO ---------------------------
+       No servidor da igreja o endereco e dividido com outros sistemas, e este
+       vive sob /adba. Num dominio so dele, moraria na raiz e isto fica vazio.
+
+       No HTML o Jinja resolve isso sozinho, porque todo link passa por
+       url_for(). Mas o app.js e um arquivo ESTATICO: ele nao passa pelo Jinja
+       e nao tem como saber o prefixo. Um endereco escrito a mao la dentro
+       ("/alma/123/ficha") sairia sem o /adba, cairia no roteador da conta e a
+       tela simplesmente nao faria nada - sem erro visivel.
+
+       Por isso o prefixo vem daqui, e todo endereco montado em JavaScript
+       passa por enderecoDoSistema() (ver app.js).
+
+       request.script_root e exatamente o prefixo que o servidor esta usando -
+       nao um valor escrito a mao que pode ficar desencontrado do WSGI. #}
+  <script>
+    window.ADBA_BASE = {{ request.script_root | tojson }};
+  </script>
+
   {# JavaScript proprio do sistema (ViaCEP, copiar WhatsApp, etc.) #}
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
   {% block scripts_extra %}{% endblock %}

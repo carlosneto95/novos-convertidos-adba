@@ -11,6 +11,32 @@
   "use strict"; // modo estrito: o navegador reclama de erros silenciosos
 
   // ========================================================================
+  // ENDERECOS - NUNCA escreva um caminho a mao neste arquivo
+  // ========================================================================
+
+  /**
+   * Monta um endereco do sistema, respeitando onde ele mora no dominio.
+   *
+   * POR QUE ISTO EXISTE:
+   * No servidor da igreja este sistema divide o endereco com outros dois e
+   * vive sob /adba. No HTML isso se resolve sozinho, porque todo link passa
+   * por url_for(). Mas este arquivo e ESTATICO: nao passa pelo Jinja e nao
+   * tem como adivinhar o prefixo.
+   *
+   * Um fetch("/alma/123/ficha") escrito a mao sai SEM o /adba. No servidor
+   * esse endereco cai no roteador da conta, que responde 200 com uma lista de
+   * sistemas em texto puro - entao nem da erro: a tela simplesmente nao faz
+   * nada. Foi exatamente esse o bug da ficha lateral.
+   *
+   * O prefixo vem do base.html, de request.script_root - o valor que o
+   * servidor esta REALMENTE usando. Sem ele (pagina fora do base.html, ou
+   * sistema na raiz do dominio), o caminho vale como esta.
+   */
+  function enderecoDoSistema(caminho) {
+    return (window.ADBA_BASE || "") + caminho;
+  }
+
+  // ========================================================================
   // MASCARAS - vao formatando o texto enquanto a pessoa digita
   // ========================================================================
 
@@ -381,7 +407,7 @@
         // pagina de tras rola junto e a pessoa se perde.
         document.body.style.overflow = "hidden";
 
-        fetch("/alma/" + almaId + "/ficha", {
+        fetch(enderecoDoSistema("/alma/" + almaId + "/ficha"), {
           // same-origin: o navegador manda o cookie de sessao junto.
           // Sem isso o servidor nos trataria como visitante deslogado.
           credentials: "same-origin",

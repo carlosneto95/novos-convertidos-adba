@@ -41,7 +41,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # WSGI mexe no sys.path e no sys.modules do interpretador, o que envenenaria
 # as outras suites se rodasse aqui dentro.
 # ---------------------------------------------------------------------------
-FILHO = '''# -*- coding: utf-8 -*-
+FILHO = r'''# -*- coding: utf-8 -*-
 import os, re, sys
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -152,6 +152,49 @@ checar('sem URL_PREFIXO o cookie volta para "/"',
        b.SESSION_COOKIE_PATH == "/", b.SESSION_COOKIE_PATH)
 checar("o nome proprio do cookie continua",
        b.SESSION_COOKIE_NAME == "adba_sessao", b.SESSION_COOKIE_NAME)
+
+# --- 9. o JavaScript nao pode escrever endereco a mao ---------------------
+# Este e o tipo de erro mais traicoeiro do prefixo. No HTML o Jinja resolve
+# tudo com url_for(); mas o app.js e estatico e nao sabe onde o sistema mora.
+# Um fetch("/alma/123/ficha") sai SEM o /adba, cai no roteador da conta - que
+# responde 200 com uma lista em texto puro. Nao da erro nenhum: a tela so
+# deixa de funcionar. Foi assim que a ficha lateral parou de abrir.
+_js = open(os.path.join(RAIZ, "app", "static", "js", "app.js"),
+           encoding="utf-8").read()
+
+# Os COMENTARIOS saem antes da busca. Este arquivo explica o bug citando o
+# codigo errado ('fetch("/alma/123/ficha")'), e sem tirar os comentarios o
+# teste acusaria a propria explicacao - foi o que aconteceu na primeira
+# rodada.
+_codigo = re.sub(r"/\*.*?\*/", "", _js, flags=re.S)   # blocos /* ... */
+_codigo = re.sub(r"//[^\n]*", "", _codigo)            # linhas // ...
+
+# Pegamos o que vem logo depois de "fetch(": se for uma aspa seguida de
+# barra, e um endereco NOSSO escrito a mao. O "." casa com a aspa, seja ela
+# simples ou dupla - assim a expressao nao precisa de barras invertidas.
+# Enderecos de fora ("https://viacep...") nao casam: depois da aspa vem "h".
+_amao = re.findall(r"fetch\(\s*.(/[^\s)]*)", _codigo)
+checar("nenhum fetch com endereco escrito a mao no app.js", not _amao, _amao)
+
+checar("o app.js tem o ajudante enderecoDoSistema()",
+       "function enderecoDoSistema(" in _js)
+checar("a ficha lateral usa o ajudante",
+       'enderecoDoSistema("/alma/' in _js)
+
+# E o prefixo precisa chegar ate o JavaScript.
+_base = open(os.path.join(RAIZ, "app", "templates", "base.html"),
+             encoding="utf-8").read()
+checar("o base.html publica o prefixo em window.ADBA_BASE",
+       "window.ADBA_BASE" in _base and "request.script_root" in _base)
+
+# --- 10. e o valor que chega na pagina e o certo --------------------------
+# Ler o arquivo nao basta: o que importa e o que o servidor MANDA. Se o
+# request.script_root nao valesse, aqui viria vazio e a ficha quebraria de
+# novo - sem nenhum erro aparecer.
+_html = cliente.get("/adba/login").get_data(as_text=True)
+_linha = [l.strip() for l in _html.splitlines() if "ADBA_BASE" in l]
+checar('a pagina servida em /adba traz ADBA_BASE = "/adba"',
+       'window.ADBA_BASE = "/adba"' in _html, _linha[:1])
 
 print("%d testes passaram, %d falharam" % (ok, falhas))
 sys.exit(1 if falhas else 0)
