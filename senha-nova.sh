@@ -21,6 +21,11 @@ cd ~/novos-convertidos
 source venv/bin/activate
 export FLASK_APP=run.py
 
+# --- Em que prefixo este sistema mora? ------------------------------------
+# Neste servidor o endereco e dividido com outros sistemas, cada um sob um
+# caminho. Sem ler isso aqui, o script imprimiria um link que nao abre.
+PREFIXO=$(grep '^URL_PREFIXO=' .env 2>/dev/null | cut -d= -f2- | sed 's|/$||')
+
 echo ""
 echo "==========================================================="
 echo "  CONFERINDO A INSTALACAO"
@@ -30,11 +35,11 @@ echo "==========================================================="
 # Mostramos apenas os NOMES e se estao preenchidos. Os valores em si nunca
 # aparecem na tela: o console guarda historico, e o que aparece aqui pode
 # acabar num print de tela.
-for campo in APP_ENV SECRET_KEY CADASTRO_TOKEN ADMIN_LOGIN; do
+for campo in APP_ENV SECRET_KEY CADASTRO_TOKEN ADMIN_LOGIN URL_PREFIXO; do
     valor=$(grep "^$campo=" .env 2>/dev/null | cut -d= -f2-)
     if [ -z "$valor" ]; then
         echo "  $campo: *** VAZIO - PROBLEMA ***"
-    elif [ "$campo" = "APP_ENV" ] || [ "$campo" = "ADMIN_LOGIN" ]; then
+    elif [ "$campo" = "APP_ENV" ] || [ "$campo" = "ADMIN_LOGIN" ]       || [ "$campo" = "URL_PREFIXO" ]; then
         echo "  $campo: $valor"
     else
         echo "  $campo: preenchido (${#valor} caracteres)"
@@ -66,7 +71,7 @@ echo "==========================================================="
 echo "  ANOTE AGORA - NAO APARECE DE NOVO"
 echo "==========================================================="
 echo ""
-echo "     https://$USUARIO.pythonanywhere.com"
+echo "     https://$USUARIO.pythonanywhere.com$PREFIXO/"
 echo ""
 echo "     login: $LOGIN"
 echo "     senha: $NOVA"
@@ -74,7 +79,7 @@ echo ""
 echo "  O sistema vai EXIGIR uma senha sua no primeiro acesso."
 echo ""
 echo "  Link publico de cadastro:"
-echo "     https://$USUARIO.pythonanywhere.com/cadastro/$TOKEN"
+echo "     https://$USUARIO.pythonanywhere.com$PREFIXO/cadastro/$TOKEN"
 echo ""
 echo "==========================================================="
 echo ""

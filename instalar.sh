@@ -94,6 +94,11 @@ fi
 
 export FLASK_APP=run.py
 
+# --- Em que prefixo este sistema mora? ------------------------------------
+# Neste servidor o endereco e dividido com outros sistemas, cada um sob um
+# caminho. Sem ler isso aqui, o script imprimiria um link que nao abre.
+PREFIXO=$(grep '^URL_PREFIXO=' .env 2>/dev/null | cut -d= -f2- | sed 's|/$||')
+
 # ---------------------------------------------------------------------------
 # 4. BANCO DE DADOS
 # ---------------------------------------------------------------------------
@@ -117,7 +122,7 @@ echo "  INSTALADO"
 echo "==========================================================="
 echo ""
 echo "  Endereco do sistema:"
-echo "     https://$USUARIO.pythonanywhere.com"
+echo "     https://$USUARIO.pythonanywhere.com$PREFIXO/"
 echo ""
 echo "     login: $LOGIN"
 echo "     senha: $SENHA"
@@ -125,10 +130,14 @@ echo ""
 echo "     O sistema vai EXIGIR uma senha nova no primeiro acesso."
 echo ""
 echo "  Link publico de cadastro (para divulgar na igreja):"
-echo "     https://$USUARIO.pythonanywhere.com/cadastro/$TOKEN"
+echo "     https://$USUARIO.pythonanywhere.com$PREFIXO/cadastro/$TOKEN"
 echo ""
 echo "==========================================================="
-echo "  AINDA FALTA configurar a aba Web (virtualenv, WSGI,"
-echo "  arquivos estaticos e HTTPS). O site so abre depois disso."
+echo "  AINDA FALTA ligar o sistema no servidor web. Rode:"
+echo ""
+echo "     bash ~/novos-convertidos/anexar-wsgi.sh"
+echo ""
+echo "  Ele anexa este sistema ao arquivo WSGI da conta SEM tocar nos"
+echo "  outros que ja estao no ar, e diz o que fazer na aba Web depois."
 echo "==========================================================="
 echo ""

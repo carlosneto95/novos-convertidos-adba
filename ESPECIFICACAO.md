@@ -394,3 +394,40 @@ Parar ao fim de cada etapa e aguardar OK.
 | Sem `x-transition` do Alpine no formulário | As transições do Alpine dependem de `requestAnimationFrame`. Quando o navegador economiza recursos (aba em segundo plano, bateria fraca), esse relógio para e o bloco fica **congelado semitransparente** — bug reproduzido em teste. Trocado por animação CSS (`custom.css`), que não pode travar. |
 | Bolinha dos cartões de escolha no `custom.css` | O `peer-checked:` do Tailwind vira o seletor `~`, que só alcança irmãos. A bolinha fica dentro do rótulo. Resolvido com seletor descendente. |
 | Datas gravadas em UTC | O servidor do PythonAnywhere roda em UTC e o Brasil em UTC-3. Gravar em UTC e exibir em `America/Sao_Paulo` (`app/tempo.py`) evita o relógio do semáforo pular um dia. Exige o pacote `tzdata` no Windows. |
+
+### O sistema não tem o domínio só para ele
+
+**A especificação supõe que o sistema mora na raiz do endereço.** No servidor
+não é o caso: `carlosneto.pythonanywhere.com` já servia dois sistemas em uso,
+e no PythonAnywhere uma conta tem **um web app por domínio**. Os três rodam
+no mesmo processo, montados por prefixo:
+
+| Prefixo | Sistema |
+|---|---|
+| `/demandas` | Controle de Demandas (já existia) |
+| `/fechamento` | Fechamento Contas a Pagar (já existia) |
+| `/adba` | este sistema |
+
+**O que isso obrigou a mudar:**
+
+1. **`URL_PREFIXO` no `.env`** → define `SESSION_COOKIE_PATH` e
+   `REMEMBER_COOKIE_PATH`. Sem isso o cookie vale `/` e viaja junto de toda
+   requisição aos outros dois sistemas, sem necessidade.
+2. **`deploy/bloco_wsgi_adba.py`** → o bloco que monta este sistema. É
+   **anexado** ao arquivo WSGI da conta, nunca substitui: aquele arquivo
+   guarda as senhas dos outros dois e reescrevê-lo derrubaria ambos.
+   O `create_app()` fica num `try/except` — um erro nosso não pode levar
+   sistemas de terceiros junto.
+3. **`anexar-wsgi.sh`** → faz cópia de segurança, anexa, valida a sintaxe e
+   restaura sozinho se quebrar.
+4. **Estáticos em `/adba/static/`**, não `/static/`. O mapeamento acontece no
+   servidor, antes do Python; a URL genérica interceptaria requisição dos
+   outros sistemas.
+5. **`testes/teste_multiapp.py`** → 34 verificações que montam dois sistemas
+   falsos com a mesma armadilha de nomes de módulo (`web_app`, `dados`,
+   `core`) e provam que ninguém atropela ninguém, inclusive que os outros dois
+   **continuam no ar se este falhar**.
+
+O `SESSION_COOKIE_NAME` já era `adba_sessao`, e não o padrão `session` do
+Flask — por sorte, não por previsão. Com o nome padrão, logar aqui teria
+derrubado a sessão de quem estivesse nos outros dois sistemas.

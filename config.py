@@ -143,6 +143,28 @@ class Config:
     REMEMBER_COOKIE_SECURE = True
     REMEMBER_COOKIE_DURATION = timedelta(hours=8)
 
+    # --- Quando o sistema NAO mora na raiz do dominio --------------------
+    # No PythonAnywhere este sistema divide o endereco com outros dois, cada
+    # um sob um prefixo: /demandas, /fechamento e /adba. Um dominio = um
+    # pote de cookies compartilhado, entao dois cuidados aqui:
+    #
+    #   1. SESSION_COOKIE_NAME ja e proprio ("adba_sessao"), e nao "session".
+    #      Com o nome padrao do Flask, logar aqui SOBRESCREVERIA o cookie dos
+    #      outros dois sistemas e derrubaria a sessao de quem estivesse neles.
+    #
+    #   2. O PATH do cookie limita para QUAIS enderecos o navegador envia o
+    #      cookie. Sem isso ele vale "/" e nossa sessao viaja junto de toda
+    #      requisicao aos outros sistemas, sem necessidade nenhuma.
+    #
+    # URL_PREFIXO vem do .env e precisa ser IGUAL ao prefixo usado no arquivo
+    # WSGI (ver deploy/bloco_wsgi_adba.py). Vazio = sistema na raiz.
+    #
+    # ATENCAO: prefixo errado aqui faz o login falhar EM SILENCIO - o
+    # navegador guarda o cookie e simplesmente nunca o devolve.
+    URL_PREFIXO = _texto("URL_PREFIXO", "").rstrip("/")
+    SESSION_COOKIE_PATH = URL_PREFIXO or "/"
+    REMEMBER_COOKIE_PATH = URL_PREFIXO or "/"
+
     # -----------------------------------------------------------------
     # 7. PROTECAO CSRF (secao 7, item 4)
     # -----------------------------------------------------------------

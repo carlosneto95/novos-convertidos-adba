@@ -25,6 +25,7 @@ SUITES = [
     ("Responsaveis e eventos", "teste_etapa7.py"),
     ("Relatorios e Excel",    "teste_etapa8.py"),
     ("Mesclagem e backup",    "teste_etapa9.py"),
+    ("Convivencia no dominio", "teste_multiapp.py"),
     ("REVISAO DE SEGURANCA",  "revisao_seguranca.py"),
 ]
 

@@ -5,6 +5,33 @@
 
 ---
 
+## ⚠️ LEIA ISTO ANTES DE QUALQUER COISA
+
+**O endereço `carlosneto.pythonanywhere.com` não é só deste sistema.** Ele já
+servia dois outros, que estão no ar e em uso:
+
+| Endereço | Sistema |
+|---|---|
+| `/demandas/` | Controle de Demandas |
+| `/fechamento/` | Fechamento Contas a Pagar |
+| `/adba/` | **este sistema** |
+
+No PythonAnywhere, **uma conta tem um web app por domínio**. Os três rodam no
+mesmo processo Python, montados por prefixo de caminho pelo arquivo WSGI.
+
+Disso saem três regras que **não** são opcionais:
+
+1. **Nunca apague nem reescreva o arquivo WSGI.** Ele contém as senhas dos
+   outros dois sistemas e monta os três. Reescrevê-lo derruba tudo e troca
+   segredos que estão em uso. Use o `anexar-wsgi.sh`, que **só acrescenta** no
+   fim do arquivo (Passo 7).
+2. **Nunca troque o Virtualenv por outro** sem antes conferir que os três
+   sistemas têm suas bibliotecas nele. Um só virtualenv serve aos três.
+3. **Nunca mapeie estáticos na URL `/static/`.** Use `/adba/static/`. A URL
+   genérica pegaria requisição dos outros sistemas.
+
+---
+
 ## Antes de começar
 
 | O que você precisa | Onde conseguir |
@@ -57,12 +84,24 @@ Precisa responder algo. Se não responder nada, **pare** — o arquivo de segred
 
 ---
 
-## PASSO 1 — Criar a conta e o app web
+## PASSO 1 — O app web
 
-1. Entre no PythonAnywhere
-2. Aba **Web** → **Add a new web app**
-3. Escolha **Manual configuration** *(não escolha "Flask" — o instalador dele conflita com a nossa estrutura)*
-4. Escolha **Python 3.13** *(ou a mais nova disponível; o sistema exige 3.11+)*
+**O web app já existe** — é o que serve `/demandas` e `/fechamento`.
+**Não clique em "Add a new web app".** No PythonAnywhere, um web app novo
+exigiria um domínio próprio; e o que precisamos é entrar no que já está ali.
+
+Confira apenas, na aba **Web**:
+
+| Campo | Valor esperado |
+|---|---|
+| Python version | 3.13 |
+| Virtualenv | `/home/carlosneto/novos-convertidos/venv` |
+| Force HTTPS | Enabled |
+
+> Se for uma conta **nova**, sem nada no ar: aí sim use **Add a new web app**
+> → **Manual configuration** → **Python 3.13** *(não escolha "Flask": o
+> instalador dele conflita com a nossa estrutura)*. Nesse caso o sistema pode
+> morar na raiz, e você deixa `URL_PREFIXO` vazio no `.env`.
 
 ---
 
@@ -122,9 +161,18 @@ ADMIN_SENHA_INICIAL=<uma senha temporária de 12+ caracteres>
 
 LIMITE_CADASTRO_PUBLICO=
 LIMITE_LOGIN=
+
+URL_PREFIXO=/adba
 ```
 
 Para salvar no `nano`: `Ctrl+O`, `Enter`, `Ctrl+X`.
+
+> **`URL_PREFIXO` precisa ser idêntico ao prefixo do arquivo WSGI** (`/adba`).
+> Ele define o *path* do cookie de sessão. Errado, o login falha **em
+> silêncio**: o navegador guarda o cookie e simplesmente nunca o devolve — a
+> tela de login reaparece sem mensagem de erro nenhuma. O `anexar-wsgi.sh`
+> (Passo 7.1) grava este valor sozinho; a linha aqui é só para você saber o que
+> ela faz. Sistema na raiz do domínio → deixe vazio.
 
 > **`APP_ENV=production` é o interruptor mais importante deste arquivo.** Ele desliga o modo de depuração (que mostraria o código na tela em caso de erro) e exige HTTPS no cookie de sessão.
 
@@ -160,81 +208,113 @@ Anote o login. **Você vai trocar a senha no primeiro acesso** — é obrigatór
 
 ---
 
-## PASSO 7 — Configurar o servidor web
+## PASSO 7 — Ligar o sistema no servidor web
 
-Volte à aba **Web**.
+> ⚠️ **Este é o passo onde dá para derrubar os outros dois sistemas.** Leia até
+> o fim antes de fazer.
 
-### 7.1 — Virtualenv
+### 7.1 — Anexar o nosso bloco ao arquivo WSGI
 
-No campo **Virtualenv**, digite:
+O arquivo WSGI da conta monta os três sistemas e **guarda as senhas dos outros
+dois dentro dele**. Então não mexemos nele à mão: um script cuida disso.
 
-```
-/home/SEU-USUARIO/novos-convertidos/venv
-```
-
-### 7.2 — Arquivo WSGI
-
-Clique no link do **WSGI configuration file**. **Apague tudo** e coloque:
-
-```python
-import sys
-
-# A pasta do projeto precisa estar na lista de busca do Python,
-# senão ele não acha o pacote "app" nem o "config".
-CAMINHO = "/home/SEU-USUARIO/novos-convertidos"
-if CAMINHO not in sys.path:
-    sys.path.insert(0, CAMINHO)
-
-# Carrega o .env ANTES de criar o app: é dele que vêm a SECRET_KEY,
-# o token do formulário e o APP_ENV=production.
-from dotenv import load_dotenv
-load_dotenv(CAMINHO + "/.env")
-
-from app import create_app
-
-# O nome "application" é obrigatório: é exatamente ele que o servidor procura.
-application = create_app()
+```bash
+bash ~/novos-convertidos/anexar-wsgi.sh
 ```
 
-Troque `SEU-USUARIO` pelo seu nome de usuário. Salve.
+O que ele faz, nesta ordem:
 
-### 7.3 — Arquivos estáticos
+1. copia o arquivo atual para `*.backup-DATA` — sempre dá para voltar
+2. **acrescenta** o nosso bloco no fim (nenhuma linha existente é tocada)
+3. confere que o arquivo montado ainda compila
+4. **se a sintaxe quebrar, restaura a cópia e para** — nada vai para o ar
+5. grava `URL_PREFIXO=/adba` no `.env`
+
+Pode rodar de novo quantas vezes quiser: se o bloco já estiver lá, ele avisa e
+sai sem duplicar.
+
+> **Por que anexar funciona:** o Python usa a **última** atribuição de
+> `application`. Nosso bloco lê os apps que o arquivo original já criou,
+> acrescenta o nosso e remonta os três. E o nosso `create_app()` está dentro de
+> um `try/except`: se este sistema não subir, os outros dois **continuam no ar**.
+
+### 7.2 — Arquivos estáticos
 
 Na seção **Static files**, adicione:
 
 | URL | Directory |
 |---|---|
-| `/static/` | `/home/SEU-USUARIO/novos-convertidos/app/static/` |
+| `/adba/static/` | `/home/carlosneto/novos-convertidos/app/static/` |
 
-Isso faz o PythonAnywhere entregar o logo, o CSS e o JavaScript direto — mais rápido e sem gastar processamento do app.
+> ⚠️ **A URL precisa ser `/adba/static/`, não `/static/`.** O mapeamento acontece
+> no servidor, **antes** do Python — uma URL genérica interceptaria requisição
+> dos outros dois sistemas. Eles servem os próprios arquivos em
+> `/demandas/static_web/` e `/fechamento/static_web/`; com o prefixo, ninguém
+> pisa no pé de ninguém.
 
-### 7.4 — Forçar HTTPS
+### 7.3 — Force HTTPS
 
-Ainda na aba **Web**, ligue **Force HTTPS**.
+Ainda na aba **Web**, confira que **Force HTTPS** está **Enabled**.
 
-> Sem isso, alguém na mesma rede Wi-Fi poderia ler a senha digitada no login. Com `APP_ENV=production`, o cookie de sessão **só** viaja em HTTPS — então sem esta opção o login simplesmente não funcionaria.
+> Sem isso, alguém na mesma rede Wi-Fi poderia ler a senha digitada no login.
+> Com `APP_ENV=production`, o cookie de sessão **só** viaja em HTTPS — então sem
+> esta opção o login simplesmente não funcionaria.
 
-### 7.5 — Recarregar
+### 7.4 — Recarregar
 
 Botão verde **Reload**.
+
+### 7.5 — Se algo der errado: como voltar atrás
+
+Os outros dois sistemas estão em uso. Se depois do Reload algum deles falhar:
+
+```bash
+ls -la /var/www/*.backup-*
+cp /var/www/carlosneto_pythonanywhere_com_wsgi.py.backup-DATA    /var/www/carlosneto_pythonanywhere_com_wsgi.py
+```
+
+Depois **Reload** de novo. Isso devolve o arquivo ao estado anterior e os dois
+sistemas voltam. O motivo da falha fica no **Error log** da aba Web.
 
 ---
 
 ## PASSO 8 — Conferir que subiu certo
 
-Abra `https://SEU-USUARIO.pythonanywhere.com`
+### Primeiro: os outros dois sistemas continuam de pé?
 
-**Checklist:**
+**Confira isto antes do nosso.** Se algum quebrou, volte atrás pelo Passo 7.5.
+
+- [ ] `https://carlosneto.pythonanywhere.com/demandas/` abre a tela de entrar
+- [ ] `https://carlosneto.pythonanywhere.com/fechamento/` abre a tela de entrar
+- [ ] `https://carlosneto.pythonanywhere.com/` lista os **três** sistemas
+
+### Depois: o nosso
+
+Abra `https://carlosneto.pythonanywhere.com/adba/`
 
 - [ ] A tela de login aparece, com o logotipo da ADBA
 - [ ] O cadeado do HTTPS aparece na barra do navegador
 - [ ] Você entra com o login criado no Passo 6
 - [ ] O sistema **exige** que você crie uma senha nova
 - [ ] O painel abre
-- [ ] O formulário público abre em `.../cadastro/SEU-TOKEN`
+- [ ] O formulário público abre em `/adba/cadastro/SEU-TOKEN`
 - [ ] Um token errado devolve "Página não encontrada"
 
-**Teste que o modo de produção está mesmo ligado:** abra um endereço inventado, tipo `.../xyz123`. Deve aparecer **a nossa página 404 desenhada**. Se aparecer uma tela de erro técnica com código Python, o `APP_ENV=production` não pegou — confira o Passo 4.
+### E, já logado, o teste que pega o cookie errado
+
+- [ ] Depois de logar, **recarregue** a página (F5). Se cair de volta na tela de
+      login, o `URL_PREFIXO` está diferente do prefixo do WSGI — veja o Passo 4
+- [ ] Abra `/demandas/` numa aba e `/adba/` em outra, logado nos dois. Nenhum
+      dos dois deve derrubar o outro
+
+**Teste que o modo de produção está mesmo ligado:** abra um endereço inventado,
+tipo `/adba/xyz123`. Deve aparecer **a nossa página 404 desenhada**. Se aparecer
+uma tela de erro técnica com código Python, o `APP_ENV=production` não pegou —
+confira o Passo 4.
+
+> Cuidado ao ler o resultado: um endereço inventado **sem** o `/adba`, como
+> `/xyz123`, cai no roteador da conta e devolve a lista de sistemas em texto
+> puro. Isso é o esperado — não é erro nosso.
 
 ---
 
@@ -269,8 +349,10 @@ Uma vez por mês, baixe uma cópia:
 O endereço público é:
 
 ```
-https://SEU-USUARIO.pythonanywhere.com/cadastro/SEU-TOKEN
+https://carlosneto.pythonanywhere.com/adba/cadastro/SEU-TOKEN
 ```
+
+> Não esqueça o `/adba` — sem ele o link cai no roteador da conta.
 
 **Como divulgar:** gere um QR Code desse link (há sites grátis), imprima e deixe na recepção da igreja. Quem cadastra aponta a câmera e o formulário abre.
 
@@ -299,9 +381,15 @@ Depois: aba **Web** → **Reload**.
 
 | Sintoma | O que olhar |
 |---|---|
-| "Something went wrong :-(" | Aba **Web** → **Error log**. A última linha diz o motivo. |
-| Tela sem cor nenhuma | O caminho dos **Static files** (Passo 7.3) está errado |
-| Login não entra, sem mensagem | O **Force HTTPS** (7.4) está desligado e o cookie não viaja |
+| **Os TRÊS sistemas cairam de uma vez** | Sintaxe do arquivo WSGI. Restaure a cópia — Passo 7.5 |
+| **`/demandas` ou `/fechamento` quebrou** | Restaure a cópia (7.5). Depois: o Virtualenv tem as bibliotecas deles? |
+| `/adba/` dá "not found", os outros funcionam | O `anexar-wsgi.sh` não rodou, ou rodou e o `create_app()` falhou. O motivo está no **Error log** |
+| A raiz `/` não lista `/adba/` | O `create_app()` falhou. Nosso bloco só anuncia o que subiu. Veja o **Error log** |
+| "Something went wrong :-(" | Aba **Web** → **Error log**. A última linha diz o motivo |
+| Tela sem cor nenhuma | O mapeamento dos **Static files** (7.2). A URL é `/adba/static/`, com o prefixo |
+| **Login entra e o F5 joga de volta na tela de login** | `URL_PREFIXO` diferente do prefixo do WSGI. O cookie sai com um *path* que o navegador nunca devolve |
+| Login não entra, sem mensagem | O **Force HTTPS** (7.3) está desligado e o cookie não viaja |
+| Logar aqui derruba a sessão do Demandas | Nome do cookie. O nosso é `adba_sessao`; se virar `session`, atropela os outros |
 | "Configuração inválida para produção" | Falta `SECRET_KEY` ou `CADASTRO_TOKEN` no `.env` |
 | Erro técnico na tela em vez da página 404 | `APP_ENV` não está como `production` |
 
