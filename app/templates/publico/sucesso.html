@@ -45,14 +45,24 @@
 
     {# --- Voltar ao formulário para cadastrar outra pessoa ---
          Este e o UNICO link da pagina, e leva de volta ao proprio formulario.
-         Nao ha caminho daqui para o painel nem para o login. --- #}
-    <p class="mt-8 text-sm text-slate-500">
-      Precisa cadastrar outra pessoa?
-      <a href="javascript:history.back()"
-         class="font-semibold text-marca underline decoration-marca/30 underline-offset-2 transition hover:decoration-marca">
-        Voltar ao formulário
-      </a>
-    </p>
+         Nao ha caminho daqui para o painel nem para o login.
+
+         ATENCAO: aqui NAO pode ser history.back(). O cadastro ja foi salvo, e
+         voltar no historico reabriria o formulario com tudo ainda preenchido -
+         a proxima pessoa comecaria com os dados da anterior. Este e um endereco
+         de verdade, que o navegador carrega do zero, com o formulario limpo.
+
+         (Na tela de "muitas tentativas" o history.back() esta certo: la o
+         cadastro NAO foi salvo e a pessoa precisa dos dados de volta.) --- #}
+    {% if voltar %}
+      <p class="mt-8 text-sm text-slate-500">
+        Precisa cadastrar outra pessoa?
+        <a href="{{ voltar }}"
+           class="font-semibold text-marca underline decoration-marca/30 underline-offset-2 transition hover:decoration-marca">
+          Cadastrar outra pessoa
+        </a>
+      </p>
+    {% endif %}
 
     {# --- Rodape com o contato de LGPD --- #}
     <p class="mt-10 text-[11px] leading-relaxed text-slate-400">

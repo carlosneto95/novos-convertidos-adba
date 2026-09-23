@@ -238,6 +238,57 @@ for i in range(8):
 bloqueados = codigos.count(429)
 checa(f"bloqueia apos 5 envios/hora (codigos: {codigos})", bloqueados >= 1)
 
+print("\n--- 11. VOLTAR AO FORMULARIO ENTREGA UMA PAGINA LIMPA ---")
+# O cadastro anterior JA FOI SALVO. Se o botao "Cadastrar outra pessoa"
+# voltasse no historico (history.back()), o formulario reabriria com tudo ainda
+# preenchido - e a proxima pessoa comecaria com os dados da anterior. Numa
+# igreja, onde o mesmo tablet passa de mao em mao, isso mistura os cadastros e
+# ainda mostra a quem chegou depois os dados de quem acabou de se cadastrar.
+zerar_limite()
+c = app.test_client()
+NOME_ANTERIOR = "Joaquina Distinta Sobrenome"
+TEL_ANTERIOR = "(16) 97777-3333"   # diferente do telefone da igreja, que sai no
+                                   # rodape de LGPD e daria falso positivo aqui
+r = enviar(c, nome_completo=NOME_ANTERIOR, telefone=TEL_ANTERIOR)
+sucesso = c.get(r.headers.get("Location", "/cadastro/sucesso")).get_data(as_text=True)
+
+checa("a tela de sucesso nao usa history.back()", "history.back()" not in sucesso)
+_link = re.search(r'href="(/cadastro/[^"]*)"', sucesso)
+checa("a tela de sucesso leva ao formulario por um endereco de verdade", bool(_link))
+checa("a tela de sucesso nao mostra o nome de quem foi cadastrado",
+      NOME_ANTERIOR not in sucesso)
+checa("a tela de sucesso nao mostra o telefone", "97777-3333" not in sucesso)
+
+if _link:
+    limpo = c.get(_link.group(1)).get_data(as_text=True)
+    # Procurar o texto solto no HTML acharia as OPCOES do formulario ("SP",
+    # "nao", "100"), que existem sempre. O que importa e se algum campo veio
+    # PREENCHIDO - com value=, checked ou selected.
+    _cheios = re.findall(
+        r'name="(nome_completo|telefone|cadastrante_nome|cadastrante_telefone|'
+        r'logradouro|numero|bairro|cidade|cep)"[^>]*value="([^"]+)"', limpo)
+    checa(f"nenhum campo de texto veio preenchido ({_cheios})", not _cheios)
+    checa("nenhum radio ou caixa veio marcada",
+          not re.search(r"<input[^>]*\bchecked\b", limpo))
+    checa("nenhuma lista veio com opcao ja escolhida",
+          not re.search(r"<option[^>]*\bselected\b", limpo))
+    checa("o nome da pessoa anterior nao aparece", NOME_ANTERIOR not in limpo)
+    checa("o telefone dela nao aparece", "97777-3333" not in limpo)
+
+# Sem sessao (cookie apagado, outro aparelho) nao pode sobrar link quebrado.
+_outro = app.test_client()
+_sem_sessao = _outro.get("/cadastro/sucesso").get_data(as_text=True)
+checa("sem sessao, nao aparece um link quebrado", "/cadastro/None" not in _sem_sessao)
+checa("sem sessao, tambem nao volta o history.back()",
+      "history.back()" not in _sem_sessao)
+
+# Na tela de "muitas tentativas" o history.back() esta CERTO: la o cadastro NAO
+# foi salvo, e a pessoa precisa dos dados dela de volta.
+_t429 = open(os.path.join(RAIZ, "app", "templates", "erros", "429.html"),
+             encoding="utf-8").read()
+checa("a tela de muitas tentativas mantem o history.back(), de proposito",
+      "history.back()" in _t429)
+
 print(f"\n{'=' * 55}")
 print(f"  {ok} testes passaram, {falhou} falharam")
 print(f"{'=' * 55}")

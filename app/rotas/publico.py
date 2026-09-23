@@ -24,6 +24,7 @@ from flask import (
     request,
     abort,
     current_app,
+    session,
 )
 
 from app.extensions import db, limiter
@@ -128,6 +129,7 @@ def cadastro(token):
                 detalhe="Campo invisivel preenchido - provavel robo.",
             )
             db.session.commit()
+            session["cadastro_token"] = token
             return redirect(url_for("publico.sucesso"))
 
         # --- Gravando a alma ---------------------------------------------
@@ -208,6 +210,14 @@ def cadastro(token):
 
         db.session.commit()       # grava tudo de uma vez
 
+        # --- O token vai para a sessao, nao para a URL -------------------
+        # A tela de sucesso precisa do token para montar o botao "Voltar ao
+        # formulario". Guardamos na sessao (assinada e fora do alcance do
+        # JavaScript) em vez de por na URL: um endereco fica no historico, no
+        # cabecalho Referer e na tela de quem estiver olhando por cima do
+        # ombro. Nada de novo vaza - e o mesmo token que a pessoa ja tem.
+        session["cadastro_token"] = token
+
         # A tela de sucesso NAO recebe nenhum dado da alma (secao 5.1).
         return redirect(url_for("publico.sucesso"))
 
@@ -232,4 +242,17 @@ def sucesso():
     pode ser qualquer membro da igreja - nao pode sair da tela sabendo dados de
     outras pessoas nem descobrindo que existe um sistema interno.
     """
-    return render_template("publico/sucesso.html")
+    # --- O botao "Voltar ao formulario" ----------------------------------
+    # Ele precisa abrir um formulario VAZIO, para a proxima pessoa. Antes era
+    # history.back(), que devolvia a pagina anterior com tudo ainda
+    # preenchido - o cadastro seguinte comecava com os dados do anterior.
+    #
+    # Aqui montamos um endereco de verdade, que o navegador carrega do zero.
+    # O token sai da sessao, guardado no momento em que o cadastro foi salvo.
+    #
+    # Sem token (sessao expirada, cookie apagado) nao mostramos o botao: e
+    # melhor nao ter botao do que ter um que leva a uma pagina de erro.
+    token = session.get("cadastro_token")
+    voltar = url_for("publico.cadastro", token=token) if token else None
+
+    return render_template("publico/sucesso.html", voltar=voltar)
