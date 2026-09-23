@@ -318,6 +318,80 @@ checa("o HTML ja vem com as cores prontas", "bg-semaforo-vermelho" in html or "b
 checa("nao ha conta de dias no JavaScript da pagina",
       "dias_desde" not in html and "calcularSemaforo" not in html)
 
+print("\n--- 13. NOME DO RESPONSAVEL NA LINHA ---")
+# A coluna tem largura fixa. A regra: mostra o nome INTEIRO quando cabe, e so
+# encurta para "primeiro + ultimo sobrenome" quando nao cabe. O nome completo
+# fica sempre no title=, porque a forma curta pode nao ser como a pessoa e
+# conhecida na igreja - a "irma Aparecida" viraria "Maria Nascimento".
+from app.models import Usuario as _U     # noqa: E402
+
+casos_nome = [
+    ("Ana Claudia Ferreira",              "Ana Claudia Ferreira"),
+    ("Carlos Moran",                      "Carlos Moran"),
+    ("Joao de Souza e Silva",             "Joao de Souza e Silva"),
+    ("Maria Aparecida do Nascimento",     "Maria Nascimento"),
+    ("Joao Pedro de Souza e Silva",       "Joao Silva"),
+    ("Maria das Gracas dos Santos Lima",  "Maria Lima"),
+    ("Sebastiao Rodrigues de Albuquerque", "Sebastiao Albuquerque"),
+    ("Antonio Bonifacio Evaristo de",     "Antonio Evaristo"),
+    ("Ana",                               "Ana"),
+    ("",                                  ""),
+    ("   Maria   Clara   Souza   ",       "Maria Clara Souza"),
+]
+for entrada, esperado in casos_nome:
+    obtido = _U(nome=entrada).nome_curto
+    checa(f"nome_curto({entrada!r}) = {obtido!r}", obtido == esperado)
+
+checa("nome que cabe nunca e encurtado",
+      all(_U(nome=e).nome_curto == " ".join(e.split())
+          for e, _ in casos_nome if len(" ".join(e.split())) <= _U.LIMITE_NOME_NA_LINHA))
+checa("particula ('de', 'da', 'e') nunca vira o sobrenome mostrado",
+      not any(_U(nome=e).nome_curto.split()[-1].lower()
+              in {"de", "do", "da", "dos", "das", "e"}
+              for e, _ in casos_nome if _U(nome=e).nome_curto.strip()))
+
+print("\n--- 14. A COLUNA HISTORICO ---")
+checa("o cabecalho tem a coluna Histórico", ">Histórico</span>" in html)
+
+# A coluna do historico SO pode existir de 1024px (lg) para cima. Colocada no
+# "md" (768px) ela comia a coluna do NOME: medido no navegador, a 900px o nome
+# ficava com 76px e a 768px sumia. A coluna do nome e "1fr" - encolhe sem
+# reclamar, entao o estrago nao aparece como layout quebrado, e sim como nome
+# desaparecendo. Por isso a regra esta fixada aqui.
+checa("a coluna Histórico só aparece a partir de lg (1024px)",
+      'class="hidden lg:block">Histórico' in html)
+checa("o historico da linha tambem e lg, nao md",
+      "lg:flex" in html and "hidden min-w-0 items-center gap-2 md:flex" not in html)
+checa("abaixo de 1024px vale a grade antiga, com responsavel de 7rem",
+      "md:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_7rem_9rem" in html)
+checa("de 1024px para cima vale a grade nova, com historico",
+      "lg:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_10rem_8rem_9rem" in html)
+checa("abaixo de 1024px o historico vira contagem na segunda linha",
+      'class="lg:hidden"' in html and "contatos" in html)
+checa("o nome completo do responsavel vai no title=, para o mouse",
+      'title="Joao Pereira"' in html or 'title="Ana Lima"' in html)
+
+# Os contatos desta suite sao todos "efetivo" ou "sem_resposta": os dois
+# desenhos tem que aparecer, cada um com a sua explicacao.
+checa("aparece a explicacao 'falou com a pessoa'", "falou com a pessoa" in html)
+checa("almas sem contato mostram o aviso, nao um espaco vazio",
+      "Nenhum contato registrado ainda" in html)
+
+print("\n--- 15. NENHUM COMENTARIO DE TEMPLATE VAZOU PARA A TELA ---")
+# Um {# ... #} mal fechado joga o texto do comentario DENTRO da pagina. Foi
+# o que aconteceu ao montar esta coluna: o painel exibiu "SO NO COMPUTADOR
+# (hidden md:flex)..." no meio da lista. Os testes passaram assim mesmo,
+# porque so procuravam o que DEVIA estar la - nunca o que nao devia.
+# Cada marca aqui so pode existir DENTRO de um comentario de template. Nao
+# vale usar "col-span-" nem "POR QUE": o primeiro e uma classe de CSS de
+# verdade no HTML, e o segundo aparece nos comentarios de JavaScript do
+# base.html, que sao legitimos. Uma marca mal escolhida faz o teste acusar
+# quem nao tem culpa - e um teste que grita a toa acaba ignorado.
+marcas = ["SO NO COMPUTADOR", "hidden md:flex", "NAO E SO COR", "N+1",
+          "{#", "#}", "{%", "%}", "secao 5.2", "de gosto."]
+vazou = [m for m in marcas if m in html]
+checa(f"nenhum texto de comentario aparece na pagina ({vazou})", not vazou)
+
 print(f"\n{'=' * 55}")
 print(f"  {ok} testes passaram, {falhou} falharam")
 print(f"{'=' * 55}")

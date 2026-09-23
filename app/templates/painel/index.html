@@ -202,14 +202,23 @@
                   md:grid md:items-center md:gap-2.5
                   {% if current_user.eh_admin %}
                     md:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_7rem_9rem_9.5rem]
+                    lg:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_10rem_8rem_9rem_9.5rem]
                   {% else %}
                     md:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_7rem_9rem]
+                    lg:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_10rem_8rem_9rem]
                   {% endif %}">
         <span></span>
         <span></span>
         <span>Nome</span>
         <span>Departamento</span>
         <span>Responsável</span>
+        {# "Histórico" em vez de "Contatos": a coluna traz as duas coisas -
+           as últimas tentativas de contato E as presenças nos cultos.
+
+           Só a partir de 1024px (lg). Entre 768 e 1023 ela existiria, mas
+           comeria a coluna do NOME - que e a mais importante da tela. Medido:
+           a 900px o nome ficava com 76px, e a 768px sumia por completo. #}
+        <span class="hidden lg:block">Histórico</span>
         <span>Último contato</span>
         {% if current_user.eh_admin %}<span></span>{% endif %}
       </div>

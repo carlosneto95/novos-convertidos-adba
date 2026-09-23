@@ -1,9 +1,17 @@
 {# ===========================================================================
    _linha.html - UMA ALMA, UMA LINHA (secao 5.2).
 
-   Recebe duas variaveis:
-       alma - o registro do banco
-       s    - o semaforo JA CALCULADO no servidor (app/semaforo.py)
+   Recebe do painel:
+       alma       - o registro do banco
+       s          - o semaforo JA CALCULADO no servidor (app/semaforo.py)
+       historico  - {id_da_alma: [(data, tipo, resultado), ...]} os ultimos
+                    contatos, do mais ANTIGO ao mais novo
+       presencas  - {id_da_alma: quantas presencas confirmadas}
+
+   Os dois ultimos vem prontos da rota, em consultas de lote. NUNCA busque
+   contato ou presenca aqui dentro (alma.contatos, alma.presencas): dentro de
+   um laco isso dispara uma consulta POR LINHA - o problema N+1 - e com 200
+   almas a tela trava.
 
    POR QUE "grid" E NAO "flex"?
    A primeira versao usava flex, e as colunas saiam desalinhadas: linhas com
@@ -12,18 +20,29 @@
    inclusive para as celulas vazias. Por isso a coluna de acao existe sempre,
    mesmo quando nao ha botao nenhum.
 
-   AS COLUNAS (a mesma receita esta no cabecalho, em index.html):
-       4px        barra colorida
-       2rem       circulo com a inicial
-       1fr        nome (a unica que estica)
-       7rem       departamento
-       7rem       responsavel
-       9rem       relogio
-       9.5rem     acao (designar)
+   SAO TRES LARGURAS DE TELA, nao duas:
 
-   NO CELULAR sobram so 4 colunas: barra, circulo, nome e relogio. O
-   departamento e o responsavel se mudam para baixo do nome, e o botao de
-   designar ocupa uma linha inteira embaixo.
+   CELULAR (ate 767px) - 4 colunas
+       barra, circulo, nome, relogio.
+       Departamento, responsavel e historico descem para a segunda linha,
+       debaixo do nome. O botao de designar ocupa uma linha inteira embaixo.
+
+   NOTEBOOK ESTREITO (768 a 1023px) - a grade "md", como era antes
+       4px / 2rem / 1fr nome / 7rem departamento / 7rem responsavel /
+       9rem relogio / 9.5rem acao
+       O historico NAO tem coluna aqui: fica na segunda linha, em contagem
+       ("2/3 contatos - 4 cultos").
+
+   COMPUTADOR (1024px ou mais) - a grade "lg", com tudo
+       4px / 2rem / 1fr nome / 7rem departamento / 10rem responsavel /
+       8rem historico / 9rem relogio / 9.5rem acao
+
+   POR QUE O HISTORICO SO APARECE A PARTIR DE 1024px:
+   Ele foi colocado primeiro no "md" e comeu a coluna do nome - que e a mais
+   importante da tela. Medido no navegador: a 900px o nome ficava com 76px, e
+   a 768px sumia por completo. A coluna do nome e "1fr": ela encolhe sem
+   reclamar, entao o estrago nao aparece como quebra de layout - aparece como
+   nome sumindo. Por isso a medida foi feita, em vez de so olhar a tela larga.
 =========================================================================== #}
 {% import "_icones.html" as ic %}
 
@@ -34,8 +53,10 @@
             grid-cols-[4px_2rem_minmax(0,1fr)_auto]
             {% if tem_coluna_acao %}
               md:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_7rem_9rem_9.5rem]
+              lg:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_10rem_8rem_9rem_9.5rem]
             {% else %}
               md:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_7rem_9rem]
+              lg:grid-cols-[4px_2rem_minmax(0,1fr)_7rem_10rem_8rem_9rem]
             {% endif %}">
 
   {# --- 1. BARRA COLORIDA ---------------------------------------------
@@ -67,9 +88,26 @@
       <span class="md:hidden">
         &middot; {{ alma.departamento_rotulo }}
         {% if alma.responsavel_atual %}
+          {# No celular a largura e curta demais para o nome inteiro: aqui
+             fica so o primeiro nome mesmo. #}
           &middot; {{ alma.responsavel_atual.primeiro_nome }}
         {% else %}
           &middot; <span class="font-semibold text-semaforo-roxo">sem responsável</span>
+        {% endif %}
+
+      </span>
+
+      {# O historico reduzido, em contagem. Aparece ate 1023px - tanto no
+         celular (onde nao ha coluna nenhuma) quanto no notebook estreito
+         (onde as colunas existem, menos a do historico). #}
+      <span class="lg:hidden">
+        {% set _contatos = historico.get(alma.id, []) %}
+        {% set _efetivos = _contatos | selectattr('2', 'equalto', 'efetivo') | list | length %}
+        {% if _contatos %}
+          &middot; {{ _efetivos }}/{{ _contatos | length }} contatos
+        {% endif %}
+        {% if presencas.get(alma.id, 0) %}
+          &middot; {{ presencas[alma.id] }} culto{{ 's' if presencas[alma.id] > 1 }}
         {% endif %}
       </span>
     </p>
@@ -82,12 +120,20 @@
     </span>
   </div>
 
-  {# --- 5. RESPONSAVEL (some no celular) ------------------------------- #}
+  {# --- 5. RESPONSAVEL (some no celular) -------------------------------
+     nome_curto (app/models.py) mostra o nome INTEIRO quando ele cabe, e so
+     encurta para "primeiro + ultimo sobrenome" quando nao cabe.
+
+     O title= carrega SEMPRE o nome completo, e isso nao e enfeite: a forma
+     curta pode nao ser como a pessoa e conhecida na igreja - a "irma
+     Aparecida" apareceria como "Maria Nascimento". Parar o mouse tem que
+     resolver a duvida. #}
   <div class="hidden min-w-0 md:block">
     {% if alma.responsavel_atual %}
-      <span class="flex min-w-0 items-center gap-1 text-[12px] text-slate-600">
-        {{ ic.icone('pessoa', 'w-3 h-3 text-slate-400') }}
-        <span class="truncate">{{ alma.responsavel_atual.primeiro_nome }}</span>
+      <span class="flex min-w-0 items-center gap-1 text-[12px] text-slate-600"
+            title="{{ alma.responsavel_atual.nome }}">
+        {{ ic.icone('pessoa', 'w-3 h-3 shrink-0 text-slate-400') }}
+        <span class="truncate">{{ alma.responsavel_atual.nome_curto }}</span>
       </span>
     {% else %}
       <span class="inline-block rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-semaforo-roxo">
@@ -96,7 +142,64 @@
     {% endif %}
   </div>
 
-  {# --- 6. O RELOGIO ---------------------------------------------------- #}
+  {# --- 6. HISTORICO: ultimos contatos + presencas ----------------------
+     Lido como uma linha do tempo: o mais ANTIGO a esquerda, o mais RECENTE
+     a direita. Uma linha cheia de "x" salta aos olhos quando se corre o olho
+     pela lista - que e exatamente o caso que precisa de atencao.
+
+     NAO E SO COR: cada resultado tem um desenho diferente (check, x, risco).
+     Quem nao distingue verde de vermelho continua lendo a linha. Cor sozinha
+     carregando informacao seria uma falha de acessibilidade, nao um detalhe
+     de gosto.
+
+     SO DE 1024px PARA CIMA (lg:flex). Abaixo disso esta coluna nao existe, e
+     o historico aparece em contagem na segunda linha, debaixo do nome. O
+     motivo esta no cabecalho deste arquivo: aqui a coluna comia o espaco do
+     nome, que e a informacao mais importante da tela. #}
+  {% set contatos_da_linha = historico.get(alma.id, []) %}
+  {% set qtd_presencas = presencas.get(alma.id, 0) %}
+
+  <div class="hidden min-w-0 items-center gap-2 lg:flex">
+
+    {# --- os ultimos contatos --- #}
+    {% if contatos_da_linha %}
+      <span class="flex shrink-0 items-center gap-0.5">
+        {% for data, tipo, resultado in contatos_da_linha %}
+          {% if resultado == 'efetivo' %}
+            {% set desenho = 'check' %}
+            {% set cor = 'bg-green-50 text-semaforo-verde' %}
+            {% set oque = 'falou com a pessoa' %}
+          {% elif resultado == 'recusou_contato' %}
+            {% set desenho = 'x' %}
+            {% set cor = 'bg-red-50 text-semaforo-vermelho' %}
+            {% set oque = 'recusou o contato' %}
+          {% else %}
+            {% set desenho = 'sem-resposta' %}
+            {% set cor = 'bg-amber-50 text-semaforo-amarelo' %}
+            {% set oque = 'sem resposta' %}
+          {% endif %}
+          <span class="flex h-4 w-4 items-center justify-center rounded {{ cor }}"
+                title="{{ tempo.formatar_data_hora(data) }} — {{ opcoes.TIPOS_CONTATO.get(tipo, tipo) }}: {{ oque }}">
+            {{ ic.icone(desenho, 'w-2.5 h-2.5') }}
+          </span>
+        {% endfor %}
+      </span>
+    {% else %}
+      {# Nunca houve contato. O traco ocupa o lugar para as colunas nao
+         dancarem, e diz algo - nao e a mesma coisa que "nao sei". #}
+      <span class="text-[11px] text-slate-300" title="Nenhum contato registrado ainda">—</span>
+    {% endif %}
+
+    {# --- as presencas nos cultos --- #}
+    {% if qtd_presencas %}
+      <span class="flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-slate-500"
+            title="{{ qtd_presencas }} presença{{ 's' if qtd_presencas > 1 }} registrada{{ 's' if qtd_presencas > 1 }} em cultos">
+        {{ ic.icone('igreja', 'w-3 h-3 text-slate-400') }}{{ qtd_presencas }}
+      </span>
+    {% endif %}
+  </div>
+
+  {# --- 7. O RELOGIO ---------------------------------------------------- #}
   {% set classe_cor = {
       'vermelho': 'text-semaforo-vermelho',
       'laranja':  'text-semaforo-laranja',
@@ -134,7 +237,7 @@
     {% endif %}
   </div>
 
-  {# --- 7. ACAO: DESIGNAR ----------------------------------------------
+  {# --- 8. ACAO: DESIGNAR ----------------------------------------------
      A coluna existe em TODA linha (mesmo vazia) para as colunas nao
      dancarem. No celular ela desce para uma linha propria, ocupando as
      4 colunas de la (col-span-4). #}

@@ -21,7 +21,7 @@ from flask import (
 from flask_login import login_required, current_user
 
 from app.extensions import db
-from app.models import NovoConvertido, Usuario, Contato, Atribuicao
+from app.models import NovoConvertido, Usuario, Contato, Atribuicao, Presenca
 from app import opcoes, semaforo as sem, auditoria
 from app.seguranca import admin_necessario, dono_da_alma_necessario
 from app.tempo import agora, hoje
@@ -70,6 +70,79 @@ def mapas_de_contato(ids_das_almas):
     efetivos = {linha[0]: linha[1] for linha in linhas}
 
     return tentativas, efetivos
+
+
+# Quantos contatos aparecem na linha do painel. Quatro cabem na coluna sem
+# apertar e ja contam a historia: "tentou tres vezes e so falou na ultima".
+CONTATOS_NA_LINHA = 4
+
+
+def ultimos_contatos(ids_das_almas, quantos=CONTATOS_NA_LINHA):
+    """
+    Devolve {id_da_alma: [contatos mais recentes, do mais ANTIGO ao mais novo]}.
+
+    Cada item e uma tupla leve (data_hora, tipo, resultado) - nao o objeto
+    inteiro do banco. Assim nao trazemos o relato, que e um texto longo e nao
+    aparece na linha nenhuma.
+
+    UMA consulta, nao uma por alma (o mesmo cuidado de mapas_de_contato).
+    Trazemos so as quatro colunas necessarias e cortamos em Python.
+
+    POR QUE CORTAR EM PYTHON E NAO NO BANCO?
+    "os N ultimos POR alma" pede uma funcao de janela (ROW_NUMBER OVER
+    PARTITION BY). O SQLite so tem isso da versao 3.25 em diante, e a consulta
+    fica bem mais dificil de ler. Como a lista de almas ja vem filtrada pela
+    tela, o volume aqui e pequeno - e legibilidade vale mais que microssegundos.
+
+    A ORDEM IMPORTA: a linha e lida da esquerda (mais antigo) para a direita
+    (mais recente), como uma linha do tempo. Por isso invertemos no fim.
+    """
+    if not ids_das_almas:
+        return {}
+
+    linhas = db.session.execute(
+        db.select(
+            Contato.convertido_id,
+            Contato.data_hora,
+            Contato.tipo,
+            Contato.resultado,
+        )
+        .where(Contato.convertido_id.in_(ids_das_almas))
+        .order_by(Contato.convertido_id, Contato.data_hora.desc())
+    ).all()
+
+    por_alma = {}
+    for alma_id, data_hora, tipo, resultado in linhas:
+        lista = por_alma.setdefault(alma_id, [])
+        if len(lista) < quantos:          # ja veio do mais novo para o mais velho
+            lista.append((data_hora, tipo, resultado))
+
+    # Inverte: a linha do tempo da tela vai do mais antigo ao mais recente.
+    return {alma_id: list(reversed(lista)) for alma_id, lista in por_alma.items()}
+
+
+def presencas_por_alma(ids_das_almas):
+    """
+    Devolve {id_da_alma: quantas presencas CONFIRMADAS}.
+
+    So conta presente=True. Um registro com presente=False significa "foi
+    chamado e faltou" - informacao util na ficha, mas na linha do painel
+    contaria como se a pessoa tivesse ido.
+
+    Uma consulta so, com GROUP BY - mesmo padrao das outras.
+    """
+    if not ids_das_almas:
+        return {}
+
+    linhas = db.session.execute(
+        db.select(Presenca.convertido_id, db.func.count())
+        .where(
+            Presenca.convertido_id.in_(ids_das_almas),
+            Presenca.presente.is_(True),
+        )
+        .group_by(Presenca.convertido_id)
+    ).all()
+    return {linha[0]: linha[1] for linha in linhas}
 
 
 # ===========================================================================
@@ -180,6 +253,11 @@ def index():
     ids = [a.id for a in almas]
     tentativas, efetivos = mapas_de_contato(ids)
 
+    # O historico que aparece na linha: os ultimos contatos e as presencas.
+    # Duas consultas a mais, em lote - nao uma por alma.
+    historico = ultimos_contatos(ids)
+    presencas = presencas_por_alma(ids)
+
     pares = sem.calcular_muitas(almas, tentativas, efetivos)
 
     # ----- Filtro: cor ----------------------------------------------------
@@ -243,6 +321,8 @@ def index():
     return render_template(
         "painel/index.html",
         pares=pares,
+        historico=historico,        # {id: [(data, tipo, resultado), ...]}
+        presencas=presencas,        # {id: quantas presencas confirmadas}
         contagem=contagem,
         integradas_no_mes=integradas_no_mes,
         aguardando=aguardando,

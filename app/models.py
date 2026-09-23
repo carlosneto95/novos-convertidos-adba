@@ -168,6 +168,54 @@ class Usuario(UserMixin, db.Model):
         """"Joao Pereira da Silva" -> "Joao". Usado no cabecalho e nos cards."""
         return (self.nome or "").split(" ")[0]
 
+    # Quantos caracteres cabem na coluna "Responsavel" do painel. Vem de uma
+    # medida real: a coluna tem 10rem (160px) e o texto e 12px - da uns 24
+    # caracteres. Deixamos 22 de folga, porque letra larga (M, W) ocupa mais.
+    LIMITE_NOME_NA_LINHA = 22
+
+    @property
+    def nome_curto(self):
+        """
+        O nome para a LINHA do painel, onde a largura e fixa.
+
+        A regra tem duas etapas:
+          1. cabe inteiro?            -> mostra inteiro
+          2. nao cabe?                -> "primeiro + ultimo sobrenome"
+
+        "Ana Claudia Ferreira"           -> "Ana Claudia Ferreira"  (cabe)
+        "Maria Aparecida do Nascimento"  -> "Maria Nascimento"      (nao cabe)
+
+        ATENCAO: a forma curta pode nao ser como a pessoa e conhecida na
+        igreja - a "irma Aparecida" viraria "Maria Nascimento". Por isso, em
+        toda tela que usa isto, o nome COMPLETO tem que estar no title=, que
+        aparece ao parar o mouse. Sem esse cuidado, o painel passa a chamar as
+        pessoas por um nome que ninguem reconhece.
+
+        As particulas ("de", "do", "da", "dos", "das", "e") nunca servem como
+        sobrenome final: "Joao de Souza e Silva" tem que virar "Joao Silva",
+        nunca "Joao e".
+        """
+        # split() sem argumento quebra em QUALQUER espaco em branco e descarta
+        # os vazios. Junto com o join, isso limpa espaco duplicado no meio do
+        # nome ("Maria   Clara" -> "Maria Clara") e sobras nas pontas. O HTML
+        # ate esconderia isso na tela, mas o mesmo texto vai para o title= e
+        # para a planilha exportada, onde apareceria.
+        partes = (self.nome or "").split()
+        nome = " ".join(partes)
+
+        if len(nome) <= self.LIMITE_NOME_NA_LINHA:
+            return nome
+        if len(partes) < 2:
+            return nome
+
+        particulas = {"de", "do", "da", "dos", "das", "e", "di", "del"}
+        for pedaco in reversed(partes[1:]):
+            if pedaco.lower() not in particulas:
+                return partes[0] + " " + pedaco
+
+        # Só sobraram partículas depois do primeiro nome (caso improvável).
+        return partes[0]
+
     def __repr__(self):
         """Como o objeto aparece no terminal quando voce o imprime. So para depurar."""
         return f"<Usuario {self.login} ({self.papel})>"
