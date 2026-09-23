@@ -213,7 +213,30 @@ Anote o login. **Você vai trocar a senha no primeiro acesso** — é obrigatór
 > ⚠️ **Este é o passo onde dá para derrubar os outros dois sistemas.** Leia até
 > o fim antes de fazer.
 
-### 7.1 — Anexar o nosso bloco ao arquivo WSGI
+### 7.1 — Deixar o virtualenv servir os três sistemas
+
+Um web app tem **um** virtualenv — e aqui ele serve três sistemas. Então esse
+virtualenv precisa ter as bibliotecas dos três.
+
+```bash
+bash ~/novos-convertidos/preparar-venv.sh
+```
+
+> ⚠️ **O Reload é que revela esse problema, e aí já é tarde.** O PythonAnywhere
+> só passa a usar o virtualenv configurado quando o app é recarregado. Até lá o
+> processo no ar continua com o ambiente antigo e tudo parece bem — mesmo que o
+> virtualenv novo não tenha as bibliotecas dos outros sistemas. Foi exatamente o
+> caso aqui: o Fechamento usa `requests`, que o venv deste projeto não tinha.
+
+O script carrega o arquivo WSGI de verdade, com o Python do venv. Se faltar
+alguma coisa, liga o `include-system-site-packages` (o venv passa a enxergar os
+pacotes do sistema, **sem** perder prioridade para as nossas versões) e testa de
+novo. Se ainda assim faltar, **desfaz a mudança**, diz qual biblioteca falta e
+avisa para não recarregar.
+
+Só siga para o 7.2 depois de ver **PODE RECARREGAR**.
+
+### 7.2 — Anexar o nosso bloco ao arquivo WSGI
 
 O arquivo WSGI da conta monta os três sistemas e **guarda as senhas dos outros
 dois dentro dele**. Então não mexemos nele à mão: um script cuida disso.
@@ -238,7 +261,7 @@ sai sem duplicar.
 > acrescenta o nosso e remonta os três. E o nosso `create_app()` está dentro de
 > um `try/except`: se este sistema não subir, os outros dois **continuam no ar**.
 
-### 7.2 — Arquivos estáticos
+### 7.3 — Arquivos estáticos
 
 Na seção **Static files**, adicione:
 
@@ -252,7 +275,7 @@ Na seção **Static files**, adicione:
 > `/demandas/static_web/` e `/fechamento/static_web/`; com o prefixo, ninguém
 > pisa no pé de ninguém.
 
-### 7.3 — Force HTTPS
+### 7.4 — Force HTTPS
 
 Ainda na aba **Web**, confira que **Force HTTPS** está **Enabled**.
 
@@ -260,11 +283,11 @@ Ainda na aba **Web**, confira que **Force HTTPS** está **Enabled**.
 > Com `APP_ENV=production`, o cookie de sessão **só** viaja em HTTPS — então sem
 > esta opção o login simplesmente não funcionaria.
 
-### 7.4 — Recarregar
+### 7.5 — Recarregar
 
 Botão verde **Reload**.
 
-### 7.5 — Se algo der errado: como voltar atrás
+### 7.6 — Se algo der errado: como voltar atrás
 
 Os outros dois sistemas estão em uso. Se depois do Reload algum deles falhar:
 
@@ -282,7 +305,7 @@ sistemas voltam. O motivo da falha fica no **Error log** da aba Web.
 
 ### Primeiro: os outros dois sistemas continuam de pé?
 
-**Confira isto antes do nosso.** Se algum quebrou, volte atrás pelo Passo 7.5.
+**Confira isto antes do nosso.** Se algum quebrou, volte atrás pelo Passo 7.6.
 
 - [ ] `https://carlosneto.pythonanywhere.com/demandas/` abre a tela de entrar
 - [ ] `https://carlosneto.pythonanywhere.com/fechamento/` abre a tela de entrar
@@ -388,7 +411,7 @@ Depois: aba **Web** → **Reload**.
 | "Something went wrong :-(" | Aba **Web** → **Error log**. A última linha diz o motivo |
 | Tela sem cor nenhuma | O mapeamento dos **Static files** (7.2). A URL é `/adba/static/`, com o prefixo |
 | **Login entra e o F5 joga de volta na tela de login** | `URL_PREFIXO` diferente do prefixo do WSGI. O cookie sai com um *path* que o navegador nunca devolve |
-| Login não entra, sem mensagem | O **Force HTTPS** (7.3) está desligado e o cookie não viaja |
+| Login não entra, sem mensagem | O **Force HTTPS** (7.4) está desligado e o cookie não viaja |
 | Logar aqui derruba a sessão do Demandas | Nome do cookie. O nosso é `adba_sessao`; se virar `session`, atropela os outros |
 | "Configuração inválida para produção" | Falta `SECRET_KEY` ou `CADASTRO_TOKEN` no `.env` |
 | Erro técnico na tela em vez da página 404 | `APP_ENV` não está como `production` |
