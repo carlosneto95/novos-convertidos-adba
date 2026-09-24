@@ -2,8 +2,8 @@
    _navbar.html - A BARRA DE NAVEGACAO (secao 5).
 
    Os links mudam conforme o papel de quem esta logado:
-     Admin       -> Painel · Novo Convertido · Responsáveis · Eventos · Relatórios
-     Responsável -> Painel · Eventos
+     Admin       -> Painel · Responsáveis · Eventos · Relatórios · Novo Convertido
+     Responsável -> Painel · Eventos · Novo Convertido
 
    COMPACTA DE PROPOSITO: 48px de altura (antes eram 64). Cada pixel gasto
    aqui e um pixel a menos de conteúdo no painel, que precisa caber numa
@@ -118,21 +118,22 @@
        Fica aqui, e nao na lista acima, porque nao e "mais uma secao do
        sistema": e uma porta para FORA dele, que abre em aba nova.
     ================================================================ #}
-    {% if current_user.eh_admin %}
-      <div class="ml-auto hidden items-center gap-3 lg:flex">
+    {# Aparece para TODOS (Admin e Responsavel): o responsavel tambem
+       cadastra quem aceita Jesus perto dele. O formulario e o mesmo que
+       qualquer membro da igreja ja acessa pelo QR code. #}
+    <div class="ml-auto hidden items-center gap-3 lg:flex">
         {# O risco vertical separa visualmente o que e "dentro" do sistema
            daquilo que sai dele. #}
         <span class="h-5 w-px bg-white/20"></span>
 
         {{ botao_novo_convertido(
              "flex items-center gap-1.5 rounded-md bg-chama px-2.5 py-1.5 text-[13px] font-semibold text-white transition hover:bg-chama-claro") }}
-      </div>
-    {% endif %}
+    </div>
 
     {# ================================================================
        USUARIO LOGADO (computador)
     ================================================================ #}
-    <div class="relative hidden lg:block {% if not current_user.eh_admin %}ml-auto{% endif %}">
+    <div class="relative hidden lg:block">
       <button type="button"
               @click="usuarioAberto = !usuarioAberto"
               @click.outside="usuarioAberto = false"
@@ -230,12 +231,10 @@
     </a>
 
     {# --- NOVO CONVERTIDO: o ultimo, separado, abrindo em aba nova --- #}
-    {% if current_user.eh_admin %}
-      <div class="mt-1 border-t border-white/10 pt-1">
-        {{ botao_novo_convertido(
-             "flex items-center gap-2.5 rounded-md bg-chama px-2.5 py-2.5 text-sm font-semibold text-white transition hover:bg-chama-claro") }}
-      </div>
-    {% endif %}
+    <div class="mt-1 border-t border-white/10 pt-1">
+      {{ botao_novo_convertido(
+           "flex items-center gap-2.5 rounded-md bg-chama px-2.5 py-2.5 text-sm font-semibold text-white transition hover:bg-chama-claro") }}
+    </div>
 
     <form method="POST" action="{{ url_for('auth.logout') }}" class="mt-1 border-t border-white/10 pt-1">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

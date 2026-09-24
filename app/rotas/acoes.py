@@ -23,6 +23,7 @@ de "a tela diz uma coisa, o banco diz outra".
 
 # --- IMPORTACOES ----------------------------------------------------------
 from datetime import timedelta
+from urllib.parse import quote                 # prepara o texto para ir num link
 
 from flask import Blueprint, redirect, url_for, flash, abort, current_app
 from flask_login import current_user
@@ -31,7 +32,8 @@ from app.extensions import db
 from app.models import NovoConvertido, Usuario, Contato, Atribuicao, Evento, Presenca
 from app import opcoes, auditoria
 from app.seguranca import admin_necessario, dono_da_alma_necessario
-from app.tempo import agora, hoje, FUSO_BRASIL, formatar_data_curta
+from app.tempo import agora, hoje, FUSO_BRASIL
+from app.validacao import formatar_telefone, so_digitos
 
 
 acoes = Blueprint("acoes", __name__)
@@ -352,51 +354,119 @@ def transferir(alma_id):
 
 
 # ===========================================================================
-# O RELATORIO DO WHATSAPP (secao 5.3)
+# A MENSAGEM DE BOAS-VINDAS PELO WHATSAPP (secao 5.3)
 # ===========================================================================
-def montar_relatorio_whatsapp(alma, s, total_presente, total_eventos, ultimo_contato):
-    """
-    Monta o texto que o botao "Copiar relatório WhatsApp" poe na area de
-    transferencia. Os asteriscos viram NEGRITO no WhatsApp.
+# Antes este botao montava um RELATORIO interno (status, presencas, cor do
+# semaforo) para circular entre lideres. Agora o objetivo e outro: e a
+# primeira mensagem que o RESPONSAVEL manda para a propria alma, se
+# apresentando.
 
-    Formato exigido pela secao 5.3:
-        🙌 *Acompanhamento — Maria Silva (#012)*
-        📅 Convertida em 07/09 · Culto Dominical
-        🏠 Departamento: Preciosas
-        👤 Responsável: João Pereira
-        📞 Último contato: 18/09 (efetivo)
-        ⛪ Presenças: 3 de 5 cultos
-        🟢 Em dia
-    """
-    bolinha = {
-        "verde": "🟢", "amarelo": "🟡", "laranja": "🟠",
-        "vermelho": "🔴", "roxo": "🟣", "azul": "🔵",
-    }.get(s.cor, "⚪")
+# .weekday() devolve 0 (segunda) ate 6 (domingo) - esta lista segue a mesma ordem.
+DIAS_DA_SEMANA = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
+
+def proximos_cultos(quantidade=2):
+    """Os proximos cultos ativos, de HOJE (inclusive) em diante, do mais perto ao mais longe."""
+    return db.session.execute(
+        db.select(Evento)
+        .where(Evento.data >= hoje(), Evento.ativo.is_(True))
+        .order_by(Evento.data, Evento.nome)
+        .limit(quantidade)
+    ).scalars().all()
+
+
+def linha_da_agenda(evento):
+    """
+    Uma linha da agenda. Ex: "• Domingo, 28/09 — Culto Dominical, às 18h".
+
+    O horario vem do config.py (HORARIOS_CULTOS), pelo TIPO do culto. Se o
+    tipo nao tiver horario cadastrado, a linha sai sem ele - melhor faltar a
+    hora do que mandar uma hora errada.
+    """
+    dia = DIAS_DA_SEMANA[evento.data.weekday()]
+    linha = f"• {dia}, {evento.data.strftime('%d/%m')} — {evento.nome}"
+    horario = current_app.config.get("HORARIOS_CULTOS", {}).get(evento.tipo)
+    if horario:
+        linha += f", às {horario}"
+    return linha
+
+
+def montar_mensagem_boas_vindas(alma, remetente, cultos):
+    """
+    Monta a mensagem que o responsavel manda para o novo convertido.
+    Os asteriscos viram NEGRITO no WhatsApp.
+
+    Parametros:
+        alma      - o NovoConvertido que vai RECEBER a mensagem
+        remetente - o Usuario que se apresenta (o responsavel da alma)
+        cultos    - a lista de Evento da agenda (os proximos 2)
+
+    A ordem segue o pedido: parabens e boas-vindas primeiro, depois quem
+    esta falando, a data e o culto da conversao, a disposicao (e a visita),
+    a agenda, o convite e, por fim, "salva meu numero".
+    """
     # A palavra muda com o sexo. Detalhe pequeno que faz o texto soar humano.
-    convertido = "Convertida" if alma.sexo == "F" else "Convertido"
+    bem_vindo = "bem-vinda" if alma.sexo == "F" else "bem-vindo"
+
+    # "no Culto Dominical", "no Encontro de Tribo"... funciona para todos os
+    # trabalhos da lista. O "outro" e texto livre (ex: "Batismo nas aguas"):
+    # ai vai entre parenteses, para a frase nao ficar torta.
+    data = alma.data_conversao.strftime("%d/%m/%Y")
+    if alma.trabalho == "outro":
+        quando = f"No dia {data} ({alma.trabalho_rotulo})"
+    else:
+        quando = f"No dia {data}, no {alma.trabalho_rotulo}"
+
+    igreja = current_app.config.get("IGREJA_NOME_LEGAL", "Assembleia de Deus")
 
     linhas = [
-        f"🙌 *Acompanhamento — {alma.nome_completo} ({alma.codigo_formatado})*",
-        f"📅 {convertido} em {formatar_data_curta(alma.data_conversao)} · {alma.trabalho_rotulo}",
-        f"🏠 Departamento: {alma.departamento_rotulo}",
-        (
-            f"👤 Responsável: "
-            f"{alma.responsavel_atual.nome if alma.responsavel_atual else 'ainda não designado'}"
-        ),
+        f"A Paz do Senhor, {alma.primeiro_nome}!",
+        "",
+        f"Antes de tudo: *parabéns pela decisão mais importante da sua vida!* 🙌 "
+        f"Seja muito {bem_vindo} à família!",
+        "",
+        f"Aqui é {remetente.primeiro_nome}, da *{igreja}*. "
+        f"{quando}, você aceitou Jesus — e o céu fez festa por isso! 🎉",
+        "",
+        "A partir de agora eu vou caminhar com você nessa nova fase. Estou à "
+        "disposição para o que precisar: conversar, orar junto, tirar dúvidas. "
+        "Se quiser, posso fazer uma *visita* na sua casa — é só me dizer o "
+        "melhor dia e horário.",
     ]
 
-    if ultimo_contato:
-        # "Efetivo — falei com a pessoa" vira so "efetivo"
-        resultado_curto = ultimo_contato.resultado_rotulo.split("—")[0].strip().lower()
-        linhas.append(
-            f"📞 Último contato: {formatar_data_curta(ultimo_contato.data_hora)} "
-            f"({resultado_curto})"
-        )
+    if cultos:
+        linhas += ["", "📅 *Nossos próximos cultos:*"]
+        linhas += [linha_da_agenda(e) for e in cultos]
+        linhas += [
+            "",
+            "Quero muito te receber em um desses cultos! Me conta qual fica "
+            "melhor pra você, que eu vou estar te esperando. 🙏",
+        ]
     else:
-        linhas.append("📞 Último contato: nenhum ainda")
+        # Agenda vazia (ninguem rodou o "flask seed-eventos"): o convite
+        # continua, so sem as datas.
+        linhas += [
+            "",
+            "Quero muito te receber no nosso próximo culto! Me chama que eu "
+            "te passo os dias e horários. 🙏",
+        ]
 
-    linhas.append(f"⛪ Presenças: {total_presente} de {total_eventos} cultos")
-    linhas.append(f"{bolinha} {s.texto_dias}")
+    numero = f" — {formatar_telefone(remetente.telefone)}" if remetente.telefone else ""
+    linhas += ["", f"📲 *Não esquece de salvar meu número:* {remetente.nome}{numero}"]
 
     return "\n".join(linhas)
+
+
+def link_whatsapp(telefone, texto):
+    """
+    O endereco que abre o WhatsApp JA na conversa com a alma e com o texto
+    escrito - o responsavel so confere e aperta enviar.
+
+    O wa.me exige o numero com o codigo do pais (55) e so com digitos. Se o
+    telefone nao tiver o tamanho de um numero brasileiro (10 ou 11 digitos),
+    devolve None e a tela mostra so o botao de copiar.
+    """
+    digitos = so_digitos(telefone)
+    if len(digitos) not in (10, 11):
+        return None
+    return f"https://wa.me/55{digitos}?text={quote(texto)}"

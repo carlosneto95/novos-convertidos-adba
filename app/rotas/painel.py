@@ -521,7 +521,9 @@ def ficha(alma_id, alma):
     # 6. OS FORMULARIOS DAS ACOES (Etapa 6)
     # =====================================================================
     from app.forms import ContatoForm, PresencaForm, StatusForm, TransferirForm
-    from app.rotas.acoes import eventos_do_periodo, montar_relatorio_whatsapp
+    from app.rotas.acoes import (
+        eventos_do_periodo, montar_mensagem_boas_vindas, proximos_cultos, link_whatsapp,
+    )
     from app.tempo import para_local
 
     form_contato = ContatoForm()
@@ -544,11 +546,13 @@ def ficha(alma_id, alma):
     ).scalars().all()
     form_transferir.responsavel_id.choices = [(u.id, u.nome) for u in responsaveis_ativos]
 
-    # O texto do WhatsApp e montado NO SERVIDOR. Assim o formato fica num
-    # lugar so, e o JavaScript nao precisa saber nada das regras do sistema.
-    texto_whatsapp = montar_relatorio_whatsapp(
-        alma, s, total_presente, len(eventos), contatos[0] if contatos else None
-    )
+    # A mensagem de boas-vindas e montada NO SERVIDOR. Assim o formato fica
+    # num lugar so, e o JavaScript nao precisa saber nada das regras do sistema.
+    # Quem se apresenta e o RESPONSAVEL da alma. Se ela ainda nao tem um (roxo),
+    # assina quem abriu a ficha - o Admin.
+    remetente = alma.responsavel_atual or current_user
+    texto_whatsapp = montar_mensagem_boas_vindas(alma, remetente, proximos_cultos())
+    link_zap = link_whatsapp(alma.telefone, texto_whatsapp)
 
     return render_template(
         "painel/_drawer.html",
@@ -561,6 +565,7 @@ def ficha(alma_id, alma):
         form_transferir=form_transferir,
         tem_eventos=bool(eventos_para_marcar),
         texto_whatsapp=texto_whatsapp,
+        link_zap=link_zap,
         eventos=eventos,
         mapa_presencas=mapa_presencas,
         total_presente=total_presente,

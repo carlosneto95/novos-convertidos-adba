@@ -59,6 +59,16 @@ class Config:
     IGREJA_CNPJ = "45.275.005/0001-65"                            # CNPJ, aparece no rodape do termo
     IGREJA_TELEFONE = "(16) 99280-5852"                           # canal para pedir acesso/exclusao de dados
 
+    # Horario de cada tipo de culto, para a agenda da mensagem de boas-vindas
+    # do WhatsApp. A chave e o TIPO do evento (app/opcoes.py, TIPOS_EVENTO).
+    # Tipo que nao estiver aqui (ou com "") aparece na agenda SEM horario -
+    # melhor faltar a hora do que mandar uma hora errada.
+    # Exemplo de como preencher:  "culto_dominical": "18h",
+    HORARIOS_CULTOS = {
+        "culto_dominical": "18h",
+        "culto_ensino": "19h",
+    }
+
     # -----------------------------------------------------------------
     # 2. REGRAS DO SEMAFORO (secao 4 da especificacao)
     #    Estes numeros definem quando um card fica verde, amarelo,

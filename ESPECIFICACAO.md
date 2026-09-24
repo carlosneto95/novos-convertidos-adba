@@ -205,7 +205,7 @@ Todo o cálculo de cor e de dias é feito **no backend**. O front apenas exibe.
 
 Barra de navegação horizontal fixa no topo.
 - **Admin vê:** Painel · Novo Convertido · Responsáveis · Eventos · Relatórios
-- **Responsável vê:** Painel · Eventos
+- **Responsável vê:** Painel · Eventos · Novo Convertido
 
 ### 5.1 `/cadastro/<token>` — PÚBLICO, sem login
 Mobile-first. Formulário em 4 blocos com barra de progresso:
@@ -249,18 +249,30 @@ Abas: **Dados · Contatos · Presenças · Histórico**
 - Presenças: eventos dos últimos 60 dias com ✅/❌
 - Histórico: todas as atribuições com datas e motivo
 - Botões: **Registrar contato** · **Marcar presença** · **Alterar status** ·
-  **Transferir responsável** (Admin) · **Copiar relatório WhatsApp**
+  **Transferir responsável** (Admin) · **WhatsApp** (mensagem de boas-vindas)
 
-**Formato do "Copiar relatório WhatsApp":**
+**Mensagem de boas-vindas do WhatsApp** (substituiu o antigo "relatório WhatsApp"):
+a primeira mensagem do **responsável atual** para a alma. Botões: **Abrir no
+WhatsApp** (já na conversa com a alma, texto escrito) e **Copiar a mensagem**.
 ```
-🙌 *Acompanhamento — Maria Silva (#012)*
-📅 Convertida em 07/09 · Culto Dominical
-🏠 Departamento: Preciosas
-👤 Responsável: João Pereira
-📞 Último contato: 18/09 (efetivo)
-⛪ Presenças: 3 de 5 cultos
-🟢 Em dia
+A Paz do Senhor, Maria!
+
+Antes de tudo: *parabéns pela decisão mais importante da sua vida!* 🙌 Seja muito bem-vinda à família!
+
+Aqui é João, da *Assembleia de Deus Ministério Belém*. No dia 07/09/2026, no Culto Dominical, você aceitou Jesus — e o céu fez festa por isso! 🎉
+
+A partir de agora eu vou caminhar com você nessa nova fase. Estou à disposição (...) posso fazer uma *visita* na sua casa (...)
+
+📅 *Nossos próximos cultos:*
+• Domingo, 28/09 — Culto Dominical, às 18h
+• Terça, 30/09 — Culto de Ensino, às 19h
+
+Quero muito te receber em um desses cultos! (...)
+
+📲 *Não esquece de salvar meu número:* João Pereira — (16) 99999-0000
 ```
+- Agenda = os 2 próximos eventos ativos; horário por tipo vem de `HORARIOS_CULTOS` no `config.py`.
+- "bem-vindo/bem-vinda" segue o sexo da alma; alma sem responsável → assina quem abriu a ficha.
 
 ### 5.4 `/responsaveis` — só Admin
 Criar usuário (login + senha gerada), ativar/desativar, redefinir senha.

@@ -22,6 +22,9 @@ class ConfigTeste(DevelopmentConfig):
     SQLALCHEMY_DATABASE_URI = "sqlite://"
     WTF_CSRF_ENABLED = True
     CADASTRO_TOKEN = "t"
+    # So o domingo tem horario: assim o teste confere as duas formas da linha
+    # da agenda (com e sem hora).
+    HORARIOS_CULTOS = {"culto_dominical": "18h", "culto_ensino": ""}
 
 
 ok = falhou = 0
@@ -45,7 +48,8 @@ with app.app_context():
     admin.definir_senha("SenhaForte#2026")
     joao = Usuario(nome="Joao Pereira", login="joao", papel="responsavel", ativo=True, deve_trocar_senha=False)
     joao.definir_senha("OutraSenha#99")
-    ana = Usuario(nome="Ana Lima", login="ana", papel="responsavel", ativo=True, deve_trocar_senha=False)
+    ana = Usuario(nome="Ana Lima", login="ana", papel="responsavel", ativo=True, deve_trocar_senha=False,
+                  telefone="16991112222")
     ana.definir_senha("MaisUma#777")
     db.session.add_all([admin, joao, ana])
     db.session.flush()
@@ -73,6 +77,14 @@ with app.app_context():
     ev = Evento(nome="Culto Dominical", tipo="culto_dominical", data=hoje() - timedelta(days=3), ativo=True)
     ev_antigo = Evento(nome="Culto Antigo", tipo="culto_ceia", data=hoje() - timedelta(days=300), ativo=True)
     db.session.add_all([ev, ev_antigo])
+    # A agenda da mensagem de boas-vindas: os 2 PROXIMOS cultos ativos.
+    # O cancelado (amanha) e o terceiro (daqui a 9 dias) nao podem aparecer.
+    db.session.add_all([
+        Evento(nome="Culto Cancelado", tipo="culto_ceia", data=hoje() + timedelta(days=1), ativo=False),
+        Evento(nome="Culto Dominical", tipo="culto_dominical", data=hoje() + timedelta(days=2), ativo=True),
+        Evento(nome="Culto de Ensino", tipo="culto_ensino", data=hoje() + timedelta(days=5), ativo=True),
+        Evento(nome="Culto Distante", tipo="encontro_tribo", data=hoje() + timedelta(days=9), ativo=True),
+    ])
     db.session.flush()
 
     db.session.add(Atribuicao(convertido_id=a1.id, responsavel_id=ID_JOAO,
@@ -295,18 +307,75 @@ r = cj.post(f"/alma/{ID2}/contato", data={
     "tipo": "telefone", "data_hora": AGORA_LOCAL, "resultado": "efetivo", "relato": "sem token"})
 checa(f"POST sem token CSRF e recusado (deu {r.status_code})", r.status_code == 400)
 
-print("\n--- 12. O RELATORIO DO WHATSAPP (secao 5.3) ---")
+print("\n--- 12. A MENSAGEM DE BOAS-VINDAS DO WHATSAPP (secao 5.3) ---")
+# A alma 3 foi transferida para a Ana no teste 9: e ELA quem se apresenta,
+# mesmo com o Admin abrindo a ficha.
 h = ca.get(f"/alma/{ID3}/ficha").get_data(as_text=True)
 import html as libhtml
-trecho = libhtml.unescape(h[h.find("🙌"):h.find("🙌") + 500].split("</textarea>")[0])
-linhas = trecho.split("\n")
-checa("linha 1 tem o nome e o codigo", linhas[0].startswith("🙌 *Acompanhamento —") and "#" in linhas[0])
-checa("linha 2 tem a conversao", linhas[1].startswith("📅"))
-checa("linha 3 tem o departamento", linhas[2].startswith("🏠 Departamento:"))
-checa("linha 4 tem o responsavel", linhas[3].startswith("👤 Responsável:"))
-checa("linha 5 tem o ultimo contato", linhas[4].startswith("📞 Último contato:"))
-checa("linha 6 tem as presencas", linhas[5].startswith("⛪ Presenças:"))
-checa("linha 7 tem a bolinha do semaforo", any(b in linhas[6] for b in "🟢🟡🟠🔴🟣🔵"))
+from urllib.parse import unquote
+m = re.search(r'x-ref="textoZap"[^>]*>(.*?)</textarea>', h, re.S)
+msg = libhtml.unescape(m.group(1)) if m else ""
+data_conv = hoje().strftime("%d/%m/%Y")
+d2, d5 = hoje() + timedelta(days=2), hoje() + timedelta(days=5)
+dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+
+checa("a mensagem aparece na ficha", bool(msg))
+checa("o relatorio antigo sumiu", "*Acompanhamento —" not in h and "Presenças:" not in msg)
+checa("comeca com 'A Paz do Senhor' e o primeiro nome da alma",
+      msg.startswith("A Paz do Senhor, Alma!\n"))
+checa("parabeniza ANTES de se apresentar",
+      0 <= msg.find("parabéns") < msg.find("Aqui é"))
+checa("boas-vindas no feminino (a alma e F)", "bem-vinda" in msg)
+checa("quem se apresenta e a responsavel ATUAL (Ana), nao o Admin",
+      "Aqui é Ana, da *Assembleia de Deus Ministério Belém*" in msg)
+checa(f"cita a data e o culto da conversao ({data_conv}, Culto Dominical)",
+      f"No dia {data_conv}, no Culto Dominical, você aceitou Jesus" in msg)
+checa("se coloca a disposicao e oferece visita", "disposição" in msg and "*visita*" in msg)
+linha_d2 = f"• {dias[d2.weekday()]}, {d2.strftime('%d/%m')} — Culto Dominical, às 18h"
+linha_d5 = f"• {dias[d5.weekday()]}, {d5.strftime('%d/%m')} — Culto de Ensino"
+checa(f"agenda: 1o culto com dia, data e horario ({linha_d2})", linha_d2 in msg)
+checa("agenda: 2o culto sem horario, porque o config nao tem", linha_d5 + "\n" in msg)
+checa("agenda: o culto cancelado NAO aparece", "Cancelado" not in msg)
+checa("agenda: so os 2 proximos (o 3o fica de fora)", "Distante" not in msg)
+checa("agenda: cultos que ja passaram NAO aparecem", "Culto Antigo" not in msg)
+checa("convida para um desses 2 cultos", "te receber em um desses cultos" in msg)
+checa("termina pedindo para salvar o numero, com nome e telefone",
+      msg.rstrip().endswith("*Não esquece de salvar meu número:* Ana Lima — (16) 99111-2222"))
+
+# O botao que abre o WhatsApp ja na conversa com a alma
+m = re.search(r'href="(https://wa\.me/[^"]+)"', h)
+link = libhtml.unescape(m.group(1)) if m else ""
+checa("tem o botao 'Abrir no WhatsApp' com o numero da alma (55 + DDD)",
+      link.startswith("https://wa.me/5516992805852?text="))
+checa("o link leva a MESMA mensagem da caixa", unquote(link.split("?text=", 1)[-1]) == msg)
+checa("o botao de copiar continua la", "Copiar a mensagem" in h)
+
+# Os casos que a ficha acima nao cobre, direto na funcao
+from app.rotas.acoes import montar_mensagem_boas_vindas, link_whatsapp
+with app.test_request_context():
+    a = db.session.get(NovoConvertido, ID1)
+    a.sexo, a.trabalho, a.trabalho_outro = "M", "outro", "Batismo nas águas"
+    j = db.session.get(Usuario, ID_JOAO)
+    t = montar_mensagem_boas_vindas(a, j, [])
+    db.session.rollback()        # nada disso vai para o banco
+checa("boas-vindas no masculino", "bem-vindo à família" in t)
+checa("trabalho 'outro' vai entre parenteses",
+      f"No dia {data_conv} (Batismo nas águas), você aceitou Jesus" in t)
+checa("sem agenda cadastrada, o convite continua (sem datas)",
+      "próximo culto" in t and "Nossos próximos cultos" not in t)
+checa("responsavel sem telefone: so o nome, sem traco solto",
+      t.rstrip().endswith("salvar meu número:* Joao Pereira"))
+checa("telefone invalido nao gera link do WhatsApp", link_whatsapp("123", "oi") is None)
+
+print("\n--- 13. BOTAO 'NOVO CONVERTIDO' NO MENU ---")
+h_joao = cj.get("/painel").get_data(as_text=True)
+h_admin = ca.get("/painel").get_data(as_text=True)
+checa("o Responsavel ve o botao Novo Convertido",
+      "Novo Convertido" in h_joao and "/cadastro/t" in h_joao)
+checa("o Admin continua vendo", "Novo Convertido" in h_admin and "/cadastro/t" in h_admin)
+checa("o botao abre em aba nova", 'target="_blank"' in h_joao)
+checa("o Responsavel continua SEM Responsaveis e Relatorios no menu",
+      "/responsaveis" not in h_joao and "/relatorios" not in h_joao)
 
 print(f"\n{'=' * 55}")
 print(f"  {ok} testes passaram, {falhou} falharam")
