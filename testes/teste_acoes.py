@@ -306,7 +306,7 @@ checa("linha 3 tem o departamento", linhas[2].startswith("🏠 Departamento:"))
 checa("linha 4 tem o responsavel", linhas[3].startswith("👤 Responsável:"))
 checa("linha 5 tem o ultimo contato", linhas[4].startswith("📞 Último contato:"))
 checa("linha 6 tem as presencas", linhas[5].startswith("⛪ Presenças:"))
-checa("linha 7 tem a bolinha do semaforo", any(b in linhas[6] for b in "🟢🟡🟠🔴🟣"))
+checa("linha 7 tem a bolinha do semaforo", any(b in linhas[6] for b in "🟢🟡🟠🔴🟣🔵"))
 
 print(f"\n{'=' * 55}")
 print(f"  {ok} testes passaram, {falhou} falharam")

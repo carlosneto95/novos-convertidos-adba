@@ -294,7 +294,7 @@
   {% if pares %}
     <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-200 pt-3 text-[11px] text-slate-400">
       <span class="font-semibold uppercase tracking-wide">Legenda</span>
-      {% for cor, texto in [('verde','0 a 7 dias'), ('amarelo','8 a 14'), ('laranja','15 a 21'), ('vermelho','22+'), ('roxo','sem responsável')] %}
+      {% for cor, texto in [('verde','0 a 7 dias'), ('amarelo','8 a 14'), ('laranja','15 a 21'), ('vermelho','22+'), ('roxo','sem responsável'), ('azul','aguardando 1º contato')] %}
         <span class="flex items-center gap-1.5">
           <span class="h-2 w-2 rounded-full" style="background-color: {{ config.CORES_SEMAFORO[cor] }}"></span>
           {{ texto }}

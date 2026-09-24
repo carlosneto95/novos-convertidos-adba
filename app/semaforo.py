@@ -46,6 +46,8 @@ A cor vem do PIOR dos dois relogios - o que tem mais dias:
 Fora do semaforo:
     ROXO   - "aguardando responsavel": ninguem cuida dela ainda.
              So aparece no painel do Admin, com relogio proprio (meta 24h).
+    AZUL   - "aguardando primeiro contato": ja tem responsavel, ninguem
+             tentou contato ainda e as 48h ainda nao passaram.
     CINZA  - qualquer outro status (integrado, mudou de cidade...).
              Sai do painel principal; fica acessivel por filtro.
 """
@@ -69,7 +71,7 @@ class Semaforo:
 
     def __init__(self, cor, dias, icone=None, motivo="", dias_tentativa=None,
                  dias_efetivo=None, estourou=False, no_semaforo=True):
-        self.cor = cor                       # "verde" | "amarelo" | "laranja" | "vermelho" | "roxo" | "cinza"
+        self.cor = cor                       # "verde" | "amarelo" | "laranja" | "vermelho" | "roxo" | "azul" | "cinza"
         self.dias = dias                     # o numero que aparece no card
         self.icone = icone                   # "sem-contato" | "sem-resposta" | None
         self.motivo = motivo                 # frase curta explicando (vai no titulo do card)
@@ -93,6 +95,7 @@ class Semaforo:
             "laranja": "bg-semaforo-laranja",
             "vermelho": "bg-semaforo-vermelho",
             "roxo": "bg-semaforo-roxo",
+            "azul": "bg-semaforo-azul",
         }.get(self.cor, "bg-slate-300")
 
     @property
@@ -104,6 +107,7 @@ class Semaforo:
             "laranja": "bg-semaforo-laranja",
             "vermelho": "bg-semaforo-vermelho",
             "roxo": "bg-semaforo-roxo",
+            "azul": "bg-semaforo-azul",
         }.get(self.cor, "bg-slate-400")
 
     @property
@@ -115,6 +119,13 @@ class Semaforo:
             if self.dias == 1:
                 return "Aguardando responsável há 1 dia"
             return f"Aguardando responsável há {self.dias} dias"
+
+        if self.cor == "azul":
+            if self.dias == 0:
+                return "Aguardando primeiro contato desde hoje"
+            if self.dias == 1:
+                return "Aguardando primeiro contato há 1 dia"
+            return f"Aguardando primeiro contato há {self.dias} dias"
 
         if not self.no_semaforo:
             return self.motivo
@@ -139,6 +150,10 @@ class Semaforo:
         """
         if not self.no_semaforo and self.cor == "cinza":
             return self.motivo
+
+        # Azul: o que importa e o estado, nao os dias (sao no maximo 2).
+        if self.cor == "azul":
+            return "aguarda 1º contato"
 
         if self.dias is None:
             return "—"
@@ -282,6 +297,28 @@ def calcular(alma, ultima_tentativa=None, ultimo_efetivo=None):
     else:
         estourou_efetivo = dias_efetivo > prazo_dias
 
+    # --- CASO ESPECIAL: AGUARDANDO O PRIMEIRO CONTATO -> AZUL ------------
+    # A alma acabou de ganhar responsavel e ninguem tentou falar com ela
+    # ainda, mas as 48h NAO passaram. Antes ela ficava VERDE ("em dia"),
+    # o que confundia: parecia que o acompanhamento ja tinha comecado.
+    # O azul diz "o relogio esta correndo, o primeiro contato esta pendente".
+    #
+    # Quando as 48h estouram sem tentativa, ela sai do azul e cai na regra
+    # normal logo abaixo (minimo AMARELO, com o icone de "nao tentou").
+    if ultima_tentativa is None and not estourou_tentativa:
+        return Semaforo(
+            cor="azul",
+            dias=dias_tentativa,
+            motivo=(
+                f"Designada há {int(horas_tentativa)}h, aguardando o primeiro "
+                f"contato (prazo: {prazo_primeiro_h}h)"
+            ),
+            dias_tentativa=dias_tentativa,
+            dias_efetivo=dias_efetivo,
+            estourou=False,
+            no_semaforo=True,       # conta em "Em acompanhamento"
+        )
+
     # --- A COR: o PIOR dos dois relogios ---------------------------------
     # max() pega o maior numero de dias. O relogio mais atrasado manda.
     dias_pior = max(dias_tentativa, dias_efetivo)
@@ -380,7 +417,7 @@ def contar_por_cor(pares):
     """
     contagem = {
         "verde": 0, "amarelo": 0, "laranja": 0, "vermelho": 0,
-        "roxo": 0, "cinza": 0,
+        "roxo": 0, "azul": 0, "cinza": 0,
     }
 
     for _alma, s in pares:
@@ -389,7 +426,7 @@ def contar_por_cor(pares):
 
     # Totais derivados, para o template nao precisar somar nada.
     contagem["em_acompanhamento"] = (
-        contagem["verde"] + contagem["amarelo"]
+        contagem["azul"] + contagem["verde"] + contagem["amarelo"]
         + contagem["laranja"] + contagem["vermelho"]
     )
     # "Em atencao" junta amarelo e laranja (secao 5.2).

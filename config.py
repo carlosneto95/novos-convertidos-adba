@@ -84,6 +84,7 @@ class Config:
         "laranja":  "#f97316",   # atrasado
         "vermelho": "#dc2626",   # critico
         "roxo":     "#9333ea",   # aguardando responsavel (so o Admin ve)
+        "azul":     "#2563eb",   # designada, aguardando o primeiro contato (48h)
     }
 
     # -----------------------------------------------------------------

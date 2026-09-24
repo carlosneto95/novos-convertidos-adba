@@ -115,7 +115,9 @@ def calcular_carga():
         contagem = sem.contar_por_cor(pares)
 
         total = len(minhas)
-        verde = contagem["verde"]
+        # O azul (aguardando o 1º contato, dentro das 48h) tambem esta no
+        # prazo: nao pode baixar o percentual de quem acabou de receber a alma.
+        verde = contagem["verde"] + contagem["azul"]
         percentual = round(verde * 100 / total) if total else None
 
         # Dias medios entre contatos

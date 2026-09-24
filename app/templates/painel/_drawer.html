@@ -61,6 +61,7 @@
                 {% elif s.cor == 'amarelo' %}bg-amber-50 text-amber-700
                 {% elif s.cor == 'verde' %}bg-green-50 text-semaforo-verde
                 {% elif s.cor == 'roxo' %}bg-purple-50 text-semaforo-roxo
+                {% elif s.cor == 'azul' %}bg-blue-50 text-semaforo-azul
                 {% else %}bg-slate-100 text-slate-500{% endif %}">
       {{ ic.icone(s.icone or 'relogio', 'w-4 h-4') }}
       <span class="text-[12px] font-medium leading-snug">{{ s.motivo }}</span>

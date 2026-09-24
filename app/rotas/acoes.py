@@ -370,7 +370,7 @@ def montar_relatorio_whatsapp(alma, s, total_presente, total_eventos, ultimo_con
     """
     bolinha = {
         "verde": "🟢", "amarelo": "🟡", "laranja": "🟠",
-        "vermelho": "🔴", "roxo": "🟣",
+        "vermelho": "🔴", "roxo": "🟣", "azul": "🔵",
     }.get(s.cor, "⚪")
 
     # A palavra muda com o sexo. Detalhe pequeno que faz o texto soar humano.

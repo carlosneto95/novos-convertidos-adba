@@ -275,6 +275,15 @@ with app.app_context():
 
 s = semaforo_de(IDS["roxa_nova"])
 checa(f"a alma saiu do roxo e entrou no semaforo (agora {s.cor})", s.cor != "roxo")
+# Recem-designada e sem nenhuma tentativa: AZUL, e nao verde.
+checa(f"recem-designada sem contato -> azul (deu {s.cor})", s.cor == "azul")
+checa("azul diz 'aguardando primeiro contato'", "primeiro contato" in s.texto_dias)
+checa("azul nao e prazo estourado", s.estourou is False)
+# A primeira tentativa (de qualquer resultado) tira do azul.
+with app.app_context():
+    a = db.session.get(NovoConvertido, IDS["roxa_nova"])
+    s2 = sem.calcular(a, agora(), None)
+checa(f"depois da 1a tentativa sai do azul (deu {s2.cor})", s2.cor != "azul")
 
 print("\n--- 9. RESPONSAVEL NAO PODE DESIGNAR (secao 7, item 2) ---")
 tok_joao = re.search(r'name="csrf_token"[^>]*value="([^"]+)"',
@@ -305,8 +314,8 @@ with app.app_context():
     t, e = mapas_de_contato([a.id for a in almas])
     pares = sem.calcular_muitas(almas, t, e)
     cont = sem.contar_por_cor(pares)
-checa(f"em acompanhamento = verde+amarelo+laranja+vermelho ({cont['em_acompanhamento']})",
-      cont["em_acompanhamento"] == cont["verde"] + cont["amarelo"] + cont["laranja"] + cont["vermelho"])
+checa(f"em acompanhamento = azul+verde+amarelo+laranja+vermelho ({cont['em_acompanhamento']})",
+      cont["em_acompanhamento"] == cont["azul"] + cont["verde"] + cont["amarelo"] + cont["laranja"] + cont["vermelho"])
 checa(f"em atencao = amarelo+laranja ({cont['atencao']})",
       cont["atencao"] == cont["amarelo"] + cont["laranja"])
 checa("duplicata nao entra em nenhuma contagem de cor",

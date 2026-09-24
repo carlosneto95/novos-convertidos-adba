@@ -191,6 +191,9 @@ criação/desativação de usuário.
 **Exceções:**
 - `status_ciclo = 'aguardando_responsavel'` → 🟣 **ROXO**, só no painel do Admin,
   relógio próprio (meta: 24h para designar).
+- Alma já designada, **sem nenhuma tentativa de contato** e dentro das 48h →
+  🔵 **AZUL** ("aguardando primeiro contato"). Conta em "Em acompanhamento".
+  Passadas as 48h sem tentativa, segue a regra normal (mínimo amarelo, com 📵).
 - Qualquer `status_ciclo` diferente de `em_acompanhamento` **sai do semáforo** e
   some do painel principal (acessível por filtro).
 
