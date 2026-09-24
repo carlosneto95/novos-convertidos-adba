@@ -4,7 +4,10 @@
    Pensado para o CELULAR primeiro: e nele que a maior parte dos cadastros vai
    acontecer, muitas vezes no corredor da igreja, logo depois do culto.
 
-   ESTRUTURA: 4 blocos, um de cada vez, com barra de progresso no topo.
+   ESTRUTURA:
+     Passo 0   - tela de BOAS-VINDAS (frase + versiculo + "Iniciar cadastro")
+     Passos 1-4 - os 4 blocos do formulario, um de cada vez
+
    Mostrar 30 campos de uma vez assusta e faz a pessoa desistir. Quatro telas
    curtas parecem rapidas.
 
@@ -31,56 +34,182 @@
 {% endblock %}
 
 {% block conteudo %}
+{# ---------------------------------------------------------------------------
+   VALORES INICIAIS PARA O JAVASCRIPT
+
+   O BUG QUE ISTO CONSERTA: quando o servidor recusava o envio e devolvia a
+   pagina, os campos ligados ao Alpine (x-model) - "Seu nome", "Seu telefone",
+   rua, bairro, cidade, UF - voltavam VAZIOS. O x-model sobrescreve o campo
+   com o valor que o JavaScript tem, e o JavaScript comecava com "".
+   A pessoa corrigia o erro, avancava, e era jogada de volta ao bloco 1
+   porque o nome dela tinha sumido.
+
+   Agora o servidor entrega ao JavaScript o que a pessoa ja tinha digitado,
+   e o x-model preenche os campos com esses valores.
+
+   _value() devolve o texto exatamente como a pessoa digitou (inclusive as
+   datas, no formato AAAA-MM-DD que o campo de data entende).
+
+   comErro e direto dizem ao JavaScript para PULAR a tela de boas-vindas:
+     comErro - o servidor devolveu a pagina com erro (a pessoa ja passou por ela)
+     direto  - veio do "Cadastrar outra pessoa" da tela de sucesso
+--------------------------------------------------------------------------- #}
+{% set inicial = {
+  'cadastranteNome':     form.cadastrante_nome._value(),
+  'cadastranteTelefone': form.cadastrante_telefone._value(),
+  'sexo':                form.sexo.data or '',
+  'dataNascimento':      form.data_nascimento._value(),
+  'cep':                 form.cep._value(),
+  'logradouro':          form.logradouro._value(),
+  'bairro':              form.bairro._value(),
+  'cidade':              form.cidade._value(),
+  'uf':                  form.uf.data or '',
+  'trabalho':            form.trabalho.data or '',
+  'temConhecido':        form.tem_conhecido.data or '',
+  'jaFrequentou':        form.ja_frequentou_igreja.data or '',
+  'comErro':             form.errors | length > 0,
+  'direto':             request.args.get('direto') == '1',
+} %}
+
 {# x-data liga este trecho inteiro ao componente definido em static/js/app.js.
-   Todas as variaveis (passo, idade, menorDeIdade...) vivem ali. #}
-<div x-data="formularioCadastro({{ maioridade }})" class="min-h-screen bg-slate-50">
+   O atributo usa ASPAS SIMPLES de proposito: o filtro tojson troca toda aspa
+   simples do conteudo por ', entao nada que a pessoa digitar consegue
+   "fechar" o atributo e injetar codigo. #}
+<div x-data='formularioCadastro({{ maioridade }}, {{ inicial | tojson }})'
+     class="form-publico min-h-screen bg-slate-100/70">
 
   {# =====================================================================
-     CABECALHO FIXO + BARRA DE PROGRESSO
-     Fica grudado no topo ao rolar: a pessoa sempre sabe onde esta.
+     PASSO 0 - TELA DE BOAS-VINDAS
+     A primeira coisa que quem abre o link ve. Da o tom (e uma alegria, nao
+     uma burocracia) e explica em uma frase para que serve o cadastro.
   ===================================================================== #}
-  <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-    <div class="mx-auto max-w-2xl px-4 pt-4 pb-3">
+  <section x-show="passo === 0"
+           class="bloco-anima relative flex min-h-screen flex-col overflow-hidden bg-gradient-to-b from-marca-escuro via-marca to-marca-escuro px-6 text-white">
 
-      {# --- Marca da igreja --- #}
-      <div class="flex items-center gap-2.5">
-        <img src="{{ url_for('static', filename='img/logo-adba.png') }}"
-             alt="{{ config.IGREJA_NOME }}" class="h-8 w-auto">
-        <p class="border-l border-slate-200 pl-2.5 text-[11px] leading-tight text-slate-500">
-          Cadastro de<br>Novo Convertido
+    {# Brilho vermelho suave atras do conteudo - a "chama" do logo #}
+    <div class="pointer-events-none absolute -top-32 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-chama/25 blur-3xl"></div>
+
+    <div class="relative mx-auto flex w-full max-w-md flex-1 flex-col">
+
+      {# --- Logo --- #}
+      <div class="pt-10 text-center">
+        <img src="{{ url_for('static', filename='img/logo-adba-branco.png') }}"
+             alt="{{ config.IGREJA_NOME }}" class="mx-auto h-14 w-auto">
+      </div>
+
+      {# --- A mensagem --- #}
+      <div class="flex flex-1 flex-col justify-center py-10">
+        <span class="mx-auto inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white/80">
+          <span class="h-1.5 w-1.5 rounded-full bg-chama-claro"></span>
+          Cadastro de Novo Convertido
+        </span>
+
+        <h1 class="mt-5 text-center text-[2rem] font-bold leading-tight tracking-tight">
+          Hoje o céu está em festa!
+        </h1>
+
+        <p class="mt-4 text-center text-base leading-relaxed text-white/75">
+          Uma nova vida foi entregue a Jesus. Obrigado por ajudar a
+          <strong class="font-semibold text-white">acolher</strong> quem está
+          dando os primeiros passos na fé.
+        </p>
+
+        {# --- O versiculo --- #}
+        <figure class="mt-8 rounded-2xl border border-white/10 bg-white/[0.07] p-5 backdrop-blur-sm">
+          <div class="flex gap-3">
+            <div class="w-1 shrink-0 rounded-full bg-chama"></div>
+            <div>
+              <blockquote class="text-[15px] italic leading-relaxed text-white/90">
+                “Se alguém está em Cristo, é nova criatura; as coisas antigas já
+                passaram; eis que se fizeram novas.”
+              </blockquote>
+              <figcaption class="mt-2.5 text-xs font-semibold uppercase tracking-widest text-chama-claro">
+                2 Coríntios 5:17
+              </figcaption>
+            </div>
+          </div>
+        </figure>
+      </div>
+
+      {# --- O botao --- #}
+      <div class="pb-8">
+        <button type="button"
+                @click="iniciar()"
+                class="group flex w-full items-center justify-center gap-2 rounded-xl bg-chama px-6 py-4 text-base font-bold text-white shadow-lg shadow-black/30 transition hover:bg-chama-claro active:scale-[0.98]">
+          Iniciar cadastro
+          <span class="transition-transform group-hover:translate-x-1" aria-hidden="true">→</span>
+        </button>
+        <p class="mt-3 text-center text-xs text-white/50">
+          Leva cerca de 2 minutos &middot; 4 etapas rápidas
+        </p>
+        <p class="mt-8 text-center text-[10px] leading-relaxed text-white/30">
+          {{ config.IGREJA_NOME_LEGAL }}
         </p>
       </div>
+    </div>
+  </section>
 
-      {# --- Barra de progresso --- #}
-      {# A largura vem de uma conta no JavaScript: passo 1 = 25%, passo 4 = 100% #}
-      <div class="mt-3.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-        <div class="h-full rounded-full bg-marca transition-all duration-500 ease-out"
-             :style="`width: ${progresso}%`"></div>
+  {# =====================================================================
+     CABECALHO FIXO COM AS 4 ETAPAS
+     Fica grudado no topo ao rolar: a pessoa sempre sabe onde esta.
+     Escondido na tela de boas-vindas.
+  ===================================================================== #}
+  <header x-show="passo > 0" x-cloak
+          class="sticky top-0 z-30 bg-marca text-white shadow-md shadow-black/10">
+    <div class="mx-auto max-w-2xl px-4 pb-3 pt-3">
+
+      {# --- Marca da igreja + "Etapa X de 4" --- #}
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <img src="{{ url_for('static', filename='img/logo-adba-branco-pequeno.png') }}"
+               alt="{{ config.IGREJA_NOME }}" class="h-7 w-auto">
+          <p class="border-l border-white/20 pl-2.5 text-[11px] leading-tight text-white/60">
+            Cadastro de<br>Novo Convertido
+          </p>
+        </div>
+        <span class="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/80">
+          Etapa <span x-text="passo"></span> de 4
+        </span>
       </div>
 
-      {# --- Os 4 nomes dos blocos --- #}
-      <div class="mt-2 flex justify-between">
+      {# --- As 4 bolinhas numeradas, ligadas por uma linha ---
+           Atual    = vermelha (a chama do logo)
+           Feita    = branca com um "visto"
+           Futura   = so o contorno #}
+      <ol class="mt-3.5 flex items-start">
         <template x-for="(titulo, indice) in titulos" :key="indice">
-          <span class="text-[10px] font-semibold uppercase tracking-wide transition-colors"
-                :class="passo === indice + 1 ? 'text-marca'
-                        : (passo > indice + 1 ? 'text-slate-400' : 'text-slate-300')"
-                x-text="titulo"></span>
+          <li class="flex flex-1 flex-col items-center"
+              :class="indice < titulos.length - 1 ? 'etapa-com-linha' : ''"
+              :data-feita="passo > indice + 1">
+            <span class="relative z-10 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-all duration-300"
+                  :class="passo === indice + 1 ? 'bg-chama text-white ring-4 ring-chama/30'
+                         : (passo > indice + 1 ? 'bg-white text-marca' : 'border-2 border-white/25 text-white/50')">
+              <span x-text="passo > indice + 1 ? '✓' : indice + 1"></span>
+            </span>
+            <span class="mt-1.5 text-center text-[10px] font-semibold uppercase tracking-wide transition-colors"
+                  :class="passo === indice + 1 ? 'text-white' : 'text-white/45'"
+                  x-text="titulo"></span>
+          </li>
         </template>
-      </div>
+      </ol>
     </div>
   </header>
 
   {# =====================================================================
      O FORMULARIO
-     novalidate desliga as mensagens feias do navegador; usamos as nossas.
+     novalidate desliga as mensagens do navegador; usamos as nossas (em
+     vermelho, embaixo de cada campo, no mesmo estilo das do servidor).
   ===================================================================== #}
   <form method="POST"
         action="{{ url_for('publico.cadastro', token=token) }}"
         novalidate
+        x-show="passo > 0" x-cloak
         x-ref="formulario"
         @submit="aoEnviar($event)"
         @keydown.enter="aoApertarEnter($event)"
-        class="mx-auto max-w-2xl px-4 py-6">
+        @input="limparErroDoCampo($event.target)"
+        @change="limparErroDoCampo($event.target)"
+        class="mx-auto max-w-2xl px-4 pb-4 pt-5">
 
     {# ---------------------------------------------------------------
        TOKEN ANTI-CSRF (secao 7, item 4)
@@ -101,38 +230,39 @@
 
     {# ---------------------------------------------------------------
        AVISO DE ERRO GERAL
-       Aparece quando o servidor recusou o envio. Como a pessoa pode estar
-       num bloco diferente do campo com erro, o aviso diz onde olhar.
+       Aparece quando o servidor recusou o envio. Com a validacao da tela
+       conferindo tudo antes, isto deve ser raro - mas o servidor e quem
+       manda, entao o aviso continua existindo.
     --------------------------------------------------------------- #}
-    {% set tem_erro = form.errors %}
-    {% if tem_erro %}
-      <div class="mb-5 rounded-xl border-2 border-red-200 bg-red-50 p-4">
-        <p class="flex items-center gap-2 text-sm font-bold text-red-800">
-          <span>⚠</span> Faltou conferir alguns campos
-        </p>
-        <p class="mt-1 text-xs text-red-700">
-          Os campos com borda vermelha precisam ser corrigidos. Use os botões
-          abaixo para navegar entre os blocos.
-        </p>
+    {% if form.errors %}
+      <div class="mb-4 flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+        <span class="text-lg leading-none" aria-hidden="true">⚠️</span>
+        <div>
+          <p class="text-sm font-bold text-red-800">Faltou conferir alguns campos</p>
+          <p class="mt-0.5 text-xs leading-relaxed text-red-700">
+            Os campos marcados em vermelho precisam de correção.
+            O que você já digitou foi mantido.
+          </p>
+        </div>
       </div>
     {% endif %}
 
     {# ===============================================================
        BLOCO 1 - QUEM ESTA CADASTRANDO
     =============================================================== #}
-    <section x-show="passo === 1" x-cloak
-             class="bloco-anima">
-
-      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div class="mb-4">
-          <span class="text-[11px] font-bold uppercase tracking-widest text-marca/60">Bloco 1 de 4</span>
-          <h2 class="mt-0.5 text-lg font-bold text-slate-900">Quem está cadastrando</h2>
-          <p class="mt-1 text-sm text-slate-500">
-            Para que a equipe possa falar com você se precisar confirmar algo.
-          </p>
+    <section x-show="passo === 1" x-cloak class="bloco-anima">
+      <div class="cartao-publico">
+        <div class="cabecalho-bloco">
+          <span class="icone-bloco" aria-hidden="true">🙋</span>
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">Quem está cadastrando</h2>
+            <p class="text-sm text-slate-500">
+              Para a equipe falar com você se precisar confirmar algo.
+            </p>
+          </div>
         </div>
 
-        <div class="space-y-3">
+        <div class="space-y-4">
           {{ ui.campo(form.cadastrante_nome, obrigatorio=True,
                       extra={'x-model': 'cadastranteNome'}) }}
           {{ ui.campo(form.cadastrante_telefone, obrigatorio=True,
@@ -146,17 +276,17 @@
     {# ===============================================================
        BLOCO 2 - DADOS DA ALMA
     =============================================================== #}
-    <section x-show="passo === 2" x-cloak
-             class="bloco-anima">
-
-      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div class="mb-4">
-          <span class="text-[11px] font-bold uppercase tracking-widest text-marca/60">Bloco 2 de 4</span>
-          <h2 class="mt-0.5 text-lg font-bold text-slate-900">Dados da pessoa</h2>
-          <p class="mt-1 text-sm text-slate-500">Quem aceitou Jesus.</p>
+    <section x-show="passo === 2" x-cloak class="bloco-anima">
+      <div class="cartao-publico">
+        <div class="cabecalho-bloco">
+          <span class="icone-bloco" aria-hidden="true">👤</span>
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">Dados da pessoa</h2>
+            <p class="text-sm text-slate-500">Quem aceitou Jesus.</p>
+          </div>
         </div>
 
-        <div class="space-y-3">
+        <div class="space-y-4">
           {{ ui.campo(form.nome_completo, obrigatorio=True) }}
           {{ ui.campo(form.telefone, obrigatorio=True,
                       extra={'@input': 'mascaraTelefone($event)'}) }}
@@ -168,7 +298,7 @@
           {# --- Selo da idade calculada, aparece ao preencher a data --- #}
           <div x-show="idade !== null" x-cloak
                class="flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-2.5 text-sm">
-            <span class="text-base">🎂</span>
+            <span class="text-base" aria-hidden="true">🎂</span>
             <span class="text-slate-600">
               Idade: <strong class="text-slate-900" x-text="idade + ' anos'"></strong>
             </span>
@@ -178,47 +308,48 @@
             </span>
           </div>
         </div>
+      </div>
 
-        {# --- ENDERECO --- #}
-        <div class="mt-7 border-t border-slate-100 pt-6">
-          <h3 class="mb-4 flex items-center gap-2 text-sm font-bold text-slate-700">
-            <span>📍</span> Endereço
-            <span class="ml-auto text-[11px] font-normal text-slate-400">opcional</span>
-          </h3>
+      {# --- ENDERECO, num cartao separado: e opcional e nao deve parecer
+             tao importante quanto os dados acima --- #}
+      <div class="cartao-publico mt-4">
+        <h3 class="mb-4 flex items-center gap-2 text-sm font-bold text-slate-700">
+          <span aria-hidden="true">📍</span> Endereço
+          <span class="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">opcional</span>
+        </h3>
 
-          <div class="space-y-3">
-            {# O CEP busca o resto do endereco sozinho na base dos Correios #}
-            <div>
-              {{ ui.campo(form.cep,
-                          extra={'x-model': 'cep',
-                                 '@input': 'mascaraCep($event)',
-                                 '@blur': 'buscarCep()'}) }}
+        <div class="space-y-4">
+          {# O CEP busca o resto do endereco sozinho na base dos Correios #}
+          <div>
+            {{ ui.campo(form.cep,
+                        extra={'x-model': 'cep',
+                               '@input': 'mascaraCep($event)',
+                               '@blur': 'buscarCep()'}) }}
 
-              {# Estado da busca: procurando / achou / nao achou #}
-              <p x-show="cepEstado === 'buscando'" x-cloak
-                 class="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500">
-                <span class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-marca"></span>
-                Buscando endereço...
-              </p>
-              <p x-show="cepEstado === 'ok'" x-cloak
-                 class="mt-1.5 text-xs font-medium text-green-600">✓ Endereço encontrado</p>
-              <p x-show="cepEstado === 'nao_encontrado'" x-cloak
-                 class="mt-1.5 text-xs font-medium text-amber-600">CEP não encontrado. Preencha à mão.</p>
-            </div>
+            {# Estado da busca: procurando / achou / nao achou #}
+            <p x-show="cepEstado === 'buscando'" x-cloak
+               class="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500">
+              <span class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-marca"></span>
+              Buscando endereço...
+            </p>
+            <p x-show="cepEstado === 'ok'" x-cloak
+               class="mt-1.5 text-xs font-medium text-green-600">✓ Endereço encontrado</p>
+            <p x-show="cepEstado === 'nao_encontrado'" x-cloak
+               class="mt-1.5 text-xs font-medium text-amber-600">CEP não encontrado. Preencha à mão.</p>
+          </div>
 
-            {{ ui.campo(form.logradouro, extra={'x-model': 'logradouro'}) }}
+          {{ ui.campo(form.logradouro, extra={'x-model': 'logradouro'}) }}
 
-            <div class="grid grid-cols-3 gap-3">
-              <div class="col-span-1">{{ ui.campo(form.numero) }}</div>
-              <div class="col-span-2">{{ ui.campo(form.complemento) }}</div>
-            </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="col-span-1">{{ ui.campo(form.numero) }}</div>
+            <div class="col-span-2">{{ ui.campo(form.complemento) }}</div>
+          </div>
 
-            {{ ui.campo(form.bairro, extra={'x-model': 'bairro'}) }}
+          {{ ui.campo(form.bairro, extra={'x-model': 'bairro'}) }}
 
-            <div class="grid grid-cols-3 gap-3">
-              <div class="col-span-2">{{ ui.campo(form.cidade, extra={'x-model': 'cidade'}) }}</div>
-              <div class="col-span-1">{{ ui.selecao(form.uf, extra={'x-model': 'uf'}) }}</div>
-            </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="col-span-2">{{ ui.campo(form.cidade, extra={'x-model': 'cidade'}) }}</div>
+            <div class="col-span-1">{{ ui.selecao(form.uf, extra={'x-model': 'uf'}) }}</div>
           </div>
         </div>
       </div>
@@ -227,14 +358,14 @@
     {# ===============================================================
        BLOCO 3 - A CONVERSAO
     =============================================================== #}
-    <section x-show="passo === 3" x-cloak
-             class="bloco-anima">
-
-      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div class="mb-4">
-          <span class="text-[11px] font-bold uppercase tracking-widest text-marca/60">Bloco 3 de 4</span>
-          <h2 class="mt-0.5 text-lg font-bold text-slate-900">A conversão</h2>
-          <p class="mt-1 text-sm text-slate-500">Onde e quando ela aceitou Jesus.</p>
+    <section x-show="passo === 3" x-cloak class="bloco-anima">
+      <div class="cartao-publico">
+        <div class="cabecalho-bloco">
+          <span class="icone-bloco" aria-hidden="true">✝️</span>
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">A conversão</h2>
+            <p class="text-sm text-slate-500">Onde e quando ela aceitou Jesus.</p>
+          </div>
         </div>
 
         <div class="space-y-5">
@@ -257,7 +388,7 @@
                A especificacao exige confirmacao manual (secao 5.1). #}
             <div x-show="departamentoSugerido" x-cloak
                  class="mt-3 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <span class="text-base leading-none">💡</span>
+              <span class="text-base leading-none" aria-hidden="true">💡</span>
               <p class="text-xs leading-relaxed text-amber-800">
                 Pela idade e pelo sexo, sugerimos
                 <strong x-text="nomeDepartamentoSugerido"></strong>.
@@ -272,14 +403,14 @@
     {# ===============================================================
        BLOCO 4 - QUESTIONARIO + LGPD
     =============================================================== #}
-    <section x-show="passo === 4" x-cloak
-             class="bloco-anima">
-
-      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div class="mb-4">
-          <span class="text-[11px] font-bold uppercase tracking-widest text-marca/60">Bloco 4 de 4</span>
-          <h2 class="mt-0.5 text-lg font-bold text-slate-900">Para conhecer melhor</h2>
-          <p class="mt-1 text-sm text-slate-500">Ajuda a equipe a acolher do jeito certo.</p>
+    <section x-show="passo === 4" x-cloak class="bloco-anima">
+      <div class="cartao-publico">
+        <div class="cabecalho-bloco">
+          <span class="icone-bloco" aria-hidden="true">💬</span>
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">Para conhecer melhor</h2>
+            <p class="text-sm text-slate-500">Ajuda a equipe a acolher do jeito certo.</p>
+          </div>
         </div>
 
         <div class="space-y-5">
@@ -306,9 +437,9 @@
          Texto exigido pela especificacao, com a razao social e o telefone
          vindos do config.py.
       --------------------------------------------------------------- #}
-      <div class="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div class="cartao-publico mt-4">
         <h3 class="mb-4 flex items-center gap-2 text-sm font-bold text-slate-700">
-          <span>🔒</span> Autorização de uso dos dados
+          <span aria-hidden="true">🔒</span> Autorização de uso dos dados
         </h3>
 
         {% call ui.checkbox(form.consentimento) %}
@@ -324,7 +455,7 @@
         <div x-show="menorDeIdade" x-cloak
              class="reveal-anima mt-5 space-y-4 rounded-xl border-2 border-amber-200 bg-amber-50/50 p-4">
           <div class="flex items-start gap-2.5">
-            <span class="text-base leading-none">👨‍👩‍👧</span>
+            <span class="text-base leading-none" aria-hidden="true">👨‍👩‍👧</span>
             <div>
               <p class="text-sm font-bold text-amber-900">Pessoa menor de idade</p>
               <p class="mt-0.5 text-xs leading-relaxed text-amber-800">
@@ -351,14 +482,13 @@
        BOTOES DE NAVEGACAO
        Ficam grudados no rodape do celular: sempre ao alcance do polegar.
     =============================================================== #}
-    <div class="sticky bottom-0 z-20 mt-4 -mx-4 border-t border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur">
-      <div class="flex gap-3">
+    <div class="sticky bottom-0 z-20 -mx-4 mt-5 border-t border-slate-200 bg-white/95 px-4 pb-3 pt-3 backdrop-blur">
+      <div class="mx-auto flex max-w-2xl gap-3">
 
-        {# Voltar: some no primeiro bloco #}
+        {# Voltar: no bloco 1 ele volta para a tela de boas-vindas #}
         <button type="button"
-                x-show="passo > 1" x-cloak
                 @click="voltar()"
-                class="rounded-lg border-2 border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]">
+                class="rounded-xl border-2 border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]">
           Voltar
         </button>
 
@@ -366,8 +496,8 @@
         <button type="button"
                 x-show="passo < 4"
                 @click="proximo()"
-                class="flex-1 rounded-lg bg-marca px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-marca-claro active:scale-[0.98]">
-          Continuar
+                class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-marca px-4 py-3 text-base font-bold text-white shadow-sm transition hover:bg-marca-claro active:scale-[0.98]">
+          Continuar <span aria-hidden="true">→</span>
         </button>
 
         {# Enviar: so no ultimo bloco. type=submit e o unico que envia o form.
@@ -385,16 +515,12 @@
            DEPOIS que o envio ja comecou, entao nao tem como atrapalhar. #}
         <button type="submit"
                 x-show="passo === 4" x-cloak
-                class="flex-1 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-[0.98]"
+                class="flex-1 rounded-xl bg-green-600 px-4 py-3 text-base font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-[0.98]"
                 :class="enviando ? 'opacity-70 cursor-wait' : ''">
           <span x-show="!enviando">Concluir cadastro 🙌</span>
           <span x-show="enviando" x-cloak>Enviando...</span>
         </button>
       </div>
-
-      <p class="mt-2 text-center text-[11px] text-slate-400">
-        Bloco <span x-text="passo"></span> de 4
-      </p>
     </div>
   </form>
 </div>

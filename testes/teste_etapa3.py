@@ -289,6 +289,56 @@ _t429 = open(os.path.join(RAIZ, "app", "templates", "erros", "429.html"),
 checa("a tela de muitas tentativas mantem o history.back(), de proposito",
       "history.back()" in _t429)
 
+print("\n--- 10. TELA DE BOAS-VINDAS E DADOS PRESERVADOS APOS ERRO ---")
+import json
+
+def valores_iniciais(html):
+    """Le os valores que o servidor entrega ao JavaScript no x-data."""
+    m = re.search(r"x-data='formularioCadastro\(\d+, (.*?)\)'", html)
+    return json.loads(m.group(1)) if m else None
+
+zerar_limite()
+c = app.test_client()
+_abre = c.get(URL).get_data(as_text=True)
+checa("a tela de boas-vindas existe, com o botao Iniciar cadastro",
+      "Iniciar cadastro" in _abre and "2 Coríntios 5:17" in _abre)
+_ini = valores_iniciais(_abre)
+checa("formulario novo abre na tela de boas-vindas (sem erro, sem 'direto')",
+      _ini is not None and not _ini["comErro"] and not _ini["direto"])
+checa("'Cadastrar outra pessoa' (direto=1) pula a tela de boas-vindas",
+      valores_iniciais(c.get(URL + "?direto=1").get_data(as_text=True))["direto"] is True)
+
+# O BUG: o servidor recusava o envio e os campos do bloco 1 e do endereco
+# voltavam VAZIOS. A pessoa era jogada de volta ao bloco 1.
+r = enviar(c, nome_completo="Maria")          # sem sobrenome: servidor recusa
+_html = r.get_data(as_text=True)
+_ini = valores_iniciais(_html)
+checa("servidor recusa nome sem sobrenome (volta a pagina, 200)", r.status_code == 200)
+checa("apos o erro, abre direto no formulario (comErro)", _ini and _ini["comErro"] is True)
+checa("apos o erro, 'Seu nome' continua preenchido",
+      _ini and _ini["cadastranteNome"] == "Irma Ana Claudia")
+checa("apos o erro, 'Seu telefone' continua preenchido",
+      _ini and _ini["cadastranteTelefone"] == "(16) 98888-7777")
+checa("apos o erro, o endereco continua preenchido",
+      _ini and _ini["logradouro"] == "Rua Visconde do Rio Branco"
+      and _ini["cidade"] == "Ribeirao Preto" and _ini["uf"] == "SP")
+checa("apos o erro, as escolhas continuam marcadas",
+      _ini and _ini["sexo"] == "F" and _ini["trabalho"] == "culto_dominical")
+checa("a mensagem do servidor vem marcada para a tela achar o bloco",
+      "data-erro-servidor" in _html)
+
+# SEGURANCA: o que a pessoa digita vai para dentro de um atributo HTML.
+# Uma aspa simples ou um </script> nao pode "fugir" dali.
+zerar_limite()
+_malicioso = "Ana' onmouseover='alert(1)</script><script>alert(2)//"
+_html = enviar(app.test_client(), cadastrante_nome=_malicioso,
+               nome_completo="Maria").get_data(as_text=True)
+_ini = valores_iniciais(_html)
+checa("nome com aspa e <script> nao escapa do atributo x-data",
+      "onmouseover='alert" not in _html and "<script>alert(2)" not in _html)
+checa("e o valor chega intacto ao JavaScript",
+      _ini and _ini["cadastranteNome"] == _malicioso)
+
 print(f"\n{'=' * 55}")
 print(f"  {ok} testes passaram, {falhou} falharam")
 print(f"{'=' * 55}")

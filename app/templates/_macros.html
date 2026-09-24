@@ -25,7 +25,9 @@
 {% macro erros(campo) %}
   {% if campo.errors %}
     {% for mensagem in campo.errors %}
-      <p class="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-red-600">
+      {# data-erro-servidor: o formulario publico usa esta marca para achar o
+         bloco com erro e para apagar a mensagem quando o campo e corrigido #}
+      <p data-erro-servidor class="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-red-600">
         <span class="leading-none">⚠</span>
         {# {{ mensagem }} passa pelo autoescape do Jinja: seguro #}
         <span>{{ mensagem }}</span>

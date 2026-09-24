@@ -61,40 +61,247 @@
   }
 
   // ========================================================================
+  // VALIDACAO NA TELA - o espelho das regras do servidor
+  //
+  // O BUG QUE ISTO CONSERTA:
+  // Antes, a tela so conferia se os campos obrigatorios estavam PREENCHIDOS.
+  // Um "Maria" sem sobrenome ou um telefone "1699" passavam pelos blocos 1,
+  // 2 e 3 sem reclamacao. So no fim, ao clicar em "Concluir", o servidor
+  // recusava - e a pessoa era jogada de volta a um bloco anterior sem
+  // entender por que.
+  //
+  // Agora cada bloco confere as MESMAS regras do app/forms.py e do
+  // app/validacao.py ANTES de deixar avancar. O erro aparece na hora, no
+  // campo certo, na tela em que a pessoa esta.
+  //
+  // O servidor continua conferindo tudo de novo (regra de ouro, no topo
+  // deste arquivo). Se um dia as regras la mudarem, mude aqui tambem - senao
+  // o bug de "voltar para tras" reaparece.
+  // ========================================================================
+
+  /** "  maria   silva " -> "maria silva" (igual ao normalizar_nome do Python) */
+  function normalizarNome(texto) {
+    return (texto || "").split(/\s+/).filter(Boolean).join(" ");
+  }
+
+  /** Mesma regra do NomeValido: minimo de letras, pelo menos uma letra, sobrenome. */
+  function erroDeNome(valor, minimo, exigirSobrenome) {
+    var nome = normalizarNome(valor);
+    if (!nome) return "Este campo é obrigatório.";
+    if (nome.length < minimo) return "Digite pelo menos " + minimo + " caracteres.";
+    if (!/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(nome)) return "Digite um nome válido.";
+    if (exigirSobrenome && nome.split(" ").length < 2) {
+      return "Digite o nome completo (nome e sobrenome).";
+    }
+    return "";
+  }
+
+  /** Mesma regra do TelefoneValido: 10 ou 11 digitos, DDD real, celular com 9. */
+  function erroDeTelefone(valor) {
+    var d = (valor || "").replace(/\D/g, "");
+    var padrao = "Telefone inválido. Digite com DDD, ex: (16) 99280-5852.";
+    if (!d) return "Informe o telefone.";
+    if (d.length !== 10 && d.length !== 11) return padrao;
+    if (/^(\d)\1+$/.test(d)) return "Este telefone não parece real.";   // todos os digitos iguais
+    if (d[0] === "0") return padrao;
+    if (d.length === 11 && d[2] !== "9") {
+      return "Celular com 11 dígitos deve começar com 9 depois do DDD.";
+    }
+    return "";
+  }
+
+  /** Hoje, no formato AAAA-MM-DD (o mesmo do campo de data), no fuso do celular. */
+  function hojeISO() {
+    var h = new Date();
+    var mes = String(h.getMonth() + 1).padStart(2, "0");
+    var dia = String(h.getDate()).padStart(2, "0");
+    return h.getFullYear() + "-" + mes + "-" + dia;
+  }
+
+  /** Mesma regra do DataNascimentoValida: nao no futuro, nao mais de 120 anos. */
+  function erroDeNascimento(valor) {
+    if (!valor) return "Informe a data de nascimento.";
+    if (valor > hojeISO()) return "A data de nascimento não pode estar no futuro.";
+    var anos = new Date().getFullYear() - parseInt(valor.slice(0, 4), 10);
+    if (anos > 120) return "Data muito antiga. Confira o ano digitado.";
+    return "";
+  }
+
+  /** Mesma regra do DataConversaoValida: nao no futuro, no maximo 10 anos atras. */
+  function erroDeConversao(valor) {
+    if (!valor) return "Informe a data.";
+    if (valor > hojeISO()) return "A data da conversão não pode estar no futuro.";
+    var dias = (new Date(hojeISO()) - new Date(valor)) / 86400000;
+    if (dias > 3650) return "Data muito antiga. Confira o ano digitado.";
+    return "";
+  }
+
+  /**
+   * AS REGRAS, campo por campo (o nome e o "name" do campo no HTML).
+   * Cada regra recebe o valor e devolve a mensagem de erro, ou "" se estiver ok.
+   * Campo que nao aparece aqui e opcional e nao e conferido.
+   *
+   * Os campos condicionais ("Qual?", responsavel legal...) so sao conferidos
+   * quando estao VISIVEIS - ver validarBloco().
+   */
+  var REGRAS = {
+    cadastrante_nome:            function (v) { return erroDeNome(v, 3, false); },
+    cadastrante_telefone:        erroDeTelefone,
+    nome_completo:               function (v) { return erroDeNome(v, 3, true); },
+    telefone:                    erroDeTelefone,
+    sexo:                        function (v) { return v ? "" : "Selecione o sexo."; },
+    data_nascimento:             erroDeNascimento,
+    cep: function (v) {
+      var d = (v || "").replace(/\D/g, "");
+      return d && d.length !== 8 ? "CEP inválido. Deve ter 8 dígitos, ex: 14015-000." : "";
+    },
+    trabalho:                    function (v) { return v ? "" : "Selecione o trabalho."; },
+    trabalho_outro:              function (v) { return (v || "").trim() ? "" : "Descreva qual foi o trabalho."; },
+    data_conversao:              erroDeConversao,
+    departamento:                function (v) { return v ? "" : "Confirme o departamento."; },
+    conhecido_nome:              function (v) { return (v || "").trim() ? "" : "Informe quem ela conhece."; },
+    qual_igreja:                 function (v) { return (v || "").trim() ? "" : "Informe qual igreja."; },
+    consentimento:               function (v) { return v ? "" : "É preciso autorizar o uso dos dados para concluir."; },
+    responsavel_legal_nome:      function (v) { return (v || "").trim() ? "" : "Obrigatório para menores de idade."; },
+    responsavel_legal_telefone:  erroDeTelefone,
+    consentimento_responsavel:   function (v) { return v ? "" : "O responsável legal precisa autorizar."; },
+  };
+
+  /** O valor de um campo: texto, opcao marcada (radio) ou marcado/desmarcado. */
+  function valorDoCampo(formulario, campo) {
+    if (campo.type === "radio") {
+      var marcado = formulario.querySelector('input[name="' + campo.name + '"]:checked');
+      return marcado ? marcado.value : "";
+    }
+    if (campo.type === "checkbox") return campo.checked;
+    return campo.value;
+  }
+
+  /**
+   * Um campo esta visivel? Campo dentro de algo escondido (display:none) nao
+   * ocupa espaco na tela - getClientRects() volta vazio. E assim que sabemos
+   * que "Qual igreja?" esta escondido porque a resposta foi "Nao".
+   */
+  function estaVisivel(campo) {
+    return campo.getClientRects().length > 0;
+  }
+
+  /**
+   * A "caixa" do campo: onde a mensagem de erro vai aparecer.
+   *   - opcoes (radio)   -> o grupo inteiro (fieldset)
+   *   - caixa de marcar  -> o quadro em volta do texto da autorizacao
+   *   - demais campos    -> o bloco rotulo + campo
+   */
+  function caixaDoCampo(campo) {
+    if (campo.type === "radio") return campo.closest("fieldset");
+    if (campo.type === "checkbox") return campo.closest("label").parentElement;
+    return campo.parentElement;
+  }
+
+  /** Mostra a mensagem vermelha embaixo do campo e pinta a borda. */
+  function mostrarErro(campo, mensagem) {
+    var caixa = caixaDoCampo(campo);
+    if (!caixa) return;
+    tirarErro(campo);
+    caixa.classList.add("campo-com-erro");
+
+    var p = document.createElement("p");
+    p.className = "erro-cliente";
+    p.setAttribute("role", "alert");          // leitor de tela anuncia o erro
+    var icone = document.createElement("span");
+    icone.textContent = "⚠";
+    var texto = document.createElement("span");
+    texto.textContent = mensagem;             // textContent: nunca vira HTML
+    p.appendChild(icone);
+    p.appendChild(texto);
+    caixa.appendChild(p);
+  }
+
+  /** Apaga a mensagem (a nossa e a que veio do servidor) e a borda vermelha. */
+  function tirarErro(campo) {
+    var caixa = caixaDoCampo(campo);
+    if (!caixa) return;
+    caixa.classList.remove("campo-com-erro");
+    caixa.querySelectorAll(".erro-cliente, [data-erro-servidor]").forEach(function (p) {
+      p.remove();
+    });
+    // A borda vermelha que o SERVIDOR desenhou fica nas classes do proprio
+    // campo. Marcamos como "corrigido" e o CSS devolve a borda normal.
+    caixa.querySelectorAll("input, select, textarea").forEach(function (c) {
+      c.classList.add("erro-corrigido");
+    });
+  }
+
+  // ========================================================================
   // O COMPONENTE DO FORMULARIO PUBLICO
   //
-  // O Alpine.js chama esta funcao quando encontra x-data="formularioCadastro(18)"
+  // O Alpine.js chama esta funcao quando encontra
+  //     x-data='formularioCadastro(18, {...})'
   // no HTML. O objeto devolvido vira o "estado" daquele trecho da pagina.
+  //
+  // "inicial" traz o que a pessoa ja tinha digitado, quando o servidor
+  // devolve a pagina com algum erro (ver o topo do cadastro.html).
   // ========================================================================
-  window.formularioCadastro = function (maioridade) {
+  window.formularioCadastro = function (maioridade, inicial) {
+    inicial = inicial || {};
+
     return {
       // ------------------------------------------------------------------
-      // NAVEGACAO ENTRE OS 4 BLOCOS
+      // NAVEGACAO: passo 0 = boas-vindas, passos 1 a 4 = os blocos
       // ------------------------------------------------------------------
-      passo: 1,
+      // Se o servidor devolveu a pagina com erro, ou se a pessoa veio do
+      // "Cadastrar outra pessoa", ela ja passou pela tela de boas-vindas:
+      // comecamos direto no formulario.
+      passo: inicial.comErro || inicial.direto ? 1 : 0,
       enviando: false,
-      titulos: ["Quem cadastra", "Dados", "Conversão", "Questionário"],
+      titulos: ["Você", "Dados", "Conversão", "Perguntas"],
 
-      /** Largura da barra de progresso: passo 1 = 25%, passo 4 = 100%. */
-      get progresso() {
-        return (this.passo / 4) * 100;
+      /** Botao "Iniciar cadastro" da tela de boas-vindas. */
+      iniciar: function () {
+        this.irPara(1, true);
       },
 
       proximo: function () {
         // Confere os campos do bloco atual antes de avancar.
         // De novo: isto e conveniencia. Quem valida de verdade e o servidor.
-        if (!this.blocoAtualEstaOk()) return;
-        if (this.passo < 4) {
-          this.passo++;
-          this.rolarParaTopo();
+        if (!this.validarBloco(this.passo)) return;
+        if (this.passo < 4) this.irPara(this.passo + 1, true);
+      },
+
+      /**
+       * Botao "Voltar" da tela.
+       * Se o bloco atual foi aberto pelo "Continuar", existe uma entrada no
+       * historico do navegador para ele: voltamos por la, e o "popstate"
+       * (la no init) faz o resto. Assim o botao da tela e o botao/gesto de
+       * voltar do celular fazem EXATAMENTE a mesma coisa.
+       */
+      voltar: function () {
+        var estado = window.history.state;
+        if (estado && estado.adbaPasso === this.passo && estado.adbaPasso > this.passoDeEntrada) {
+          window.history.back();
+        } else if (this.passo > 0) {
+          this.irPara(this.passo - 1, false);
         }
       },
 
-      voltar: function () {
-        if (this.passo > 1) {
-          this.passo--;
-          this.rolarParaTopo();
-        }
+      /**
+       * Troca de bloco. "empurrar" = criar uma entrada no historico do
+       * navegador, para que o botao voltar do celular volte UM BLOCO.
+       *
+       * O BUG QUE ISTO CONSERTA: no celular, o gesto de voltar saia do
+       * formulario inteiro (os blocos nao eram paginas de verdade) e tudo
+       * que a pessoa tinha digitado se perdia.
+       */
+      irPara: function (novoPasso, empurrar) {
+        this.passo = novoPasso;
+        try {
+          if (empurrar) {
+            window.history.pushState({ adbaPasso: novoPasso }, "");
+          } else {
+            window.history.replaceState({ adbaPasso: novoPasso }, "");
+          }
+        } catch (e) { /* navegador sem historico: segue sem ele */ }
+        this.rolarParaTopo();
       },
 
       rolarParaTopo: function () {
@@ -154,44 +361,105 @@
        * A tela ficava presa em "Enviando..." para sempre e o cadastro nunca
        * chegava ao servidor.
        *
-       * Aqui o evento "submit" ja disparou quando esta funcao roda - o envio
-       * esta a caminho e nada mais o cancela. Trocamos so o texto do botao.
-       *
-       * O envio duplo (dedo nervoso, clique duas vezes) e barrado pelo
-       * preventDefault abaixo: a partir do segundo clique, o navegador
-       * descarta a tentativa.
+       * Aqui o evento "submit" ja disparou quando esta funcao roda. Ou o
+       * cancelamos de proposito (preventDefault), ou ele segue.
        */
       aoEnviar: function (evento) {
+        // Envio duplo (dedo nervoso, clique duas vezes): o segundo e ignorado.
         if (this.enviando) {
-          evento.preventDefault();   // ja esta indo; ignora o segundo clique
+          evento.preventDefault();
           return;
         }
+
+        // Ultima conferencia antes de enviar: o bloco 4 E os anteriores.
+        // Os anteriores ja foram conferidos ao avancar, mas a pessoa pode
+        // ter voltado e apagado algo. Se achar problema, leva a pessoa ao
+        // bloco certo AGORA - em vez de o servidor fazer isso depois.
+        for (var bloco = 1; bloco <= 4; bloco++) {
+          if (!this.validarBloco(bloco)) {
+            evento.preventDefault();
+            if (bloco !== this.passo) {
+              this.irPara(bloco, false);
+              var self = this;
+              // O bloco precisa estar visivel para conferir de novo e
+              // posicionar o cursor no campo com problema.
+              this.$nextTick(function () { self.validarBloco(bloco); });
+            }
+            return;
+          }
+        }
+
         this.enviando = true;
       },
 
       /**
-       * Procura campos obrigatorios vazios dentro do bloco visivel.
-       * Se achar, destaca o primeiro e impede o avanco.
+       * Confere os campos de UM bloco. Mostra a mensagem embaixo de cada
+       * campo com problema e poe o cursor no primeiro deles.
+       * Devolve true se esta tudo certo.
+       *
+       * Campo ESCONDIDO nao e conferido: "Qual igreja?" so e obrigatorio se
+       * a resposta foi "Sim", e so fica visivel nesse caso. Por isso um bloco
+       * que nao esta na tela e mostrado por um instante durante a conferencia.
        */
-      blocoAtualEstaOk: function () {
-        var secao = this.$refs.formulario.querySelectorAll("section")[this.passo - 1];
+      validarBloco: function (numero) {
+        var formulario = this.$refs.formulario;
+        var secao = formulario.querySelectorAll("section")[numero - 1];
         if (!secao) return true;
 
-        var campos = secao.querySelectorAll("input, select, textarea");
-        for (var i = 0; i < campos.length; i++) {
-          var campo = campos[i];
-          if (campo.type === "hidden" || campo.disabled) continue;
-          // offsetParent nulo = campo escondido (ex: "qual igreja?" quando a
-          // resposta foi "nao"). Campo escondido nao bloqueia o avanco.
-          if (campo.offsetParent === null && campo.type !== "radio") continue;
+        // Um bloco escondido (display:none) esconde tambem os campos que
+        // DEVERIAM estar visiveis. Mostramos o bloco um instante, conferimos
+        // e escondemos de novo - rapido demais para aparecer na tela.
+        var estavaEscondido = secao.style.display === "none";
+        if (estavaEscondido) secao.style.display = "";
 
-          if (!campo.checkValidity()) {
-            campo.reportValidity();   // mostra o balaozinho do navegador
-            campo.focus();
-            return false;
+        var primeiroComErro = null;
+        var jaVistos = {};                  // radios: confere o grupo uma vez so
+
+        secao.querySelectorAll("input, select, textarea").forEach(function (campo) {
+          var regra = REGRAS[campo.name];
+          if (!regra || jaVistos[campo.name]) return;
+          jaVistos[campo.name] = true;
+
+          // Radio fica "invisivel" (sr-only) de proposito; quem mostra se o
+          // grupo esta na tela e o rotulo ao lado dele.
+          var referencia = campo.type === "radio" ? caixaDoCampo(campo) : campo;
+          if (!estaVisivel(referencia)) {
+            tirarErro(campo);
+            return;
           }
+
+          var mensagem = regra(valorDoCampo(formulario, campo));
+          if (mensagem) {
+            mostrarErro(campo, mensagem);
+            if (!primeiroComErro) primeiroComErro = campo;
+          } else {
+            tirarErro(campo);
+          }
+        });
+
+        if (estavaEscondido) secao.style.display = "none";
+
+        if (primeiroComErro && !estavaEscondido) {
+          // Leva a pessoa ate o primeiro problema. preventScroll + scroll
+          // manual: assim o campo nao fica escondido atras do cabecalho fixo.
+          var caixa = caixaDoCampo(primeiroComErro);
+          primeiroComErro.focus({ preventScroll: true });
+          var y = caixa.getBoundingClientRect().top + window.scrollY - 140;
+          window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
         }
-        return true;
+        return !primeiroComErro;
+      },
+
+      /**
+       * Quando a pessoa mexe num campo que estava com erro, a mensagem some
+       * na hora - sinal de que ela esta no caminho certo. A conferencia
+       * completa volta a acontecer no "Continuar".
+       */
+      limparErroDoCampo: function (campo) {
+        if (!campo || !campo.name) return;
+        var caixa = caixaDoCampo(campo);
+        if (caixa && caixa.classList.contains("campo-com-erro")) tirarErro(campo);
+        else if (caixa && caixa.querySelector("[data-erro-servidor]")) tirarErro(campo);
       },
 
       // ------------------------------------------------------------------
@@ -209,14 +477,14 @@
       // ------------------------------------------------------------------
       // BLOCO 1
       // ------------------------------------------------------------------
-      cadastranteNome: "",
-      cadastranteTelefone: "",
+      cadastranteNome: inicial.cadastranteNome || "",
+      cadastranteTelefone: inicial.cadastranteTelefone || "",
 
       // ------------------------------------------------------------------
       // BLOCO 2 - IDADE E MENOR DE IDADE
       // ------------------------------------------------------------------
-      sexo: "",
-      dataNascimento: "",
+      sexo: inicial.sexo || "",
+      dataNascimento: inicial.dataNascimento || "",
 
       /**
        * Idade em anos completos. Devolve null enquanto a data nao estiver
@@ -247,11 +515,11 @@
       // ------------------------------------------------------------------
       // BLOCO 2 - BUSCA DE ENDERECO PELO CEP (API ViaCEP)
       // ------------------------------------------------------------------
-      cep: "",
-      logradouro: "",
-      bairro: "",
-      cidade: "",
-      uf: "",
+      cep: inicial.cep || "",
+      logradouro: inicial.logradouro || "",
+      bairro: inicial.bairro || "",
+      cidade: inicial.cidade || "",
+      uf: inicial.uf || "",
       cepEstado: "",   // "" | "buscando" | "ok" | "nao_encontrado" | "erro"
 
       buscarCep: function () {
@@ -300,7 +568,7 @@
       // ------------------------------------------------------------------
       // BLOCO 3 - CONVERSAO E SUGESTAO DE DEPARTAMENTO
       // ------------------------------------------------------------------
-      trabalho: "",
+      trabalho: inicial.trabalho || "",
 
       /**
        * Sugere o departamento pela regra da secao 5.1:
@@ -321,9 +589,9 @@
 
       get nomeDepartamentoSugerido() {
         var nomes = {
-          geracao_life: "Geracao Life",
+          geracao_life: "Geração Life",
           preciosas: "Preciosas",
-          irmaos: "Irmaos",
+          irmaos: "Irmãos",
         };
         return nomes[this.departamentoSugerido] || "";
       },
@@ -331,16 +599,18 @@
       // ------------------------------------------------------------------
       // BLOCO 4 - PERGUNTAS COM CAMPO CONDICIONAL
       // ------------------------------------------------------------------
-      temConhecido: "",
-      jaFrequentou: "",
+      temConhecido: inicial.temConhecido || "",
+      jaFrequentou: inicial.jaFrequentou || "",
 
       // ------------------------------------------------------------------
       // INICIALIZACAO
       // ------------------------------------------------------------------
       init: function () {
+        var self = this;
+
         // Se o servidor devolveu a pagina com erros, levamos a pessoa direto
         // ao primeiro bloco que tem problema - em vez de deixa-la caçando.
-        var primeiroErro = this.$refs.formulario.querySelector(".border-red-400, .border-red-300");
+        var primeiroErro = this.$refs.formulario.querySelector("[data-erro-servidor]");
         if (primeiroErro) {
           var secoes = Array.prototype.slice.call(
             this.$refs.formulario.querySelectorAll("section")
@@ -353,23 +623,22 @@
           }
         }
 
-        // Recupera os valores que o servidor devolveu, para que a idade, a
-        // sugestao de departamento e os campos condicionais reapareçam certos.
-        var pegar = function (id) {
-          var el = document.getElementById(id);
-          return el ? el.value : "";
-        };
-        var marcado = function (nome) {
-          var el = document.querySelector('input[name="' + nome + '"]:checked');
-          return el ? el.value : "";
-        };
+        // O passo em que a pagina ABRIU. O "Voltar" usa o historico do
+        // navegador so para os passos que vieram DEPOIS deste.
+        this.passoDeEntrada = this.passo;
+        try {
+          window.history.replaceState({ adbaPasso: this.passo }, "");
+        } catch (e) { /* sem historico: segue sem ele */ }
 
-        this.dataNascimento = pegar("data_nascimento");
-        this.cep = pegar("cep");
-        this.sexo = marcado("sexo");
-        this.trabalho = marcado("trabalho");
-        this.temConhecido = marcado("tem_conhecido");
-        this.jaFrequentou = marcado("ja_frequentou_igreja");
+        // O botao/gesto de voltar do celular: em vez de sair da pagina,
+        // volta para o bloco anterior (o endereco nao muda, so o bloco).
+        window.addEventListener("popstate", function (evento) {
+          var estado = evento.state;
+          if (estado && typeof estado.adbaPasso === "number") {
+            self.passo = estado.adbaPasso;
+            self.rolarParaTopo();
+          }
+        });
       },
     };
   };

@@ -253,6 +253,8 @@ def sucesso():
     # Sem token (sessao expirada, cookie apagado) nao mostramos o botao: e
     # melhor nao ter botao do que ter um que leva a uma pagina de erro.
     token = session.get("cadastro_token")
-    voltar = url_for("publico.cadastro", token=token) if token else None
+    # direto=1: quem esta cadastrando varias pessoas seguidas ja viu a tela
+    # de boas-vindas - o formulario abre direto no bloco 1.
+    voltar = url_for("publico.cadastro", token=token, direto=1) if token else None
 
     return render_template("publico/sucesso.html", voltar=voltar)

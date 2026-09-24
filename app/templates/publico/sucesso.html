@@ -15,35 +15,46 @@
 {% block rodape %}{% endblock %}
 
 {% block conteudo %}
-<div class="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
-  <div class="w-full max-w-md text-center">
+{# Mesmo visual da tela de boas-vindas do formulario (grafite + chama),
+   para a pessoa sentir que comecou e terminou no mesmo lugar. #}
+<div class="relative flex min-h-screen flex-col overflow-hidden bg-gradient-to-b from-marca-escuro via-marca to-marca-escuro px-6 text-white">
+
+  {# Brilho suave atras do conteudo - a "chama" do logo #}
+  <div class="pointer-events-none absolute -top-32 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-chama/25 blur-3xl"></div>
+
+  <div class="relative mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-12 text-center">
 
     {# --- Circulo verde com as maos erguidas --- #}
-    <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-green-100 text-5xl">
+    <div class="bloco-anima mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-green-500/15 text-5xl ring-8 ring-green-500/10">
       🙌
     </div>
 
-    <h1 class="mt-7 text-3xl font-bold tracking-tight text-slate-900">
+    <h1 class="mt-7 text-3xl font-bold tracking-tight">
       Cadastro realizado!
     </h1>
 
-    <p class="mx-auto mt-3 max-w-sm text-base leading-relaxed text-slate-600">
+    <p class="mx-auto mt-3 max-w-sm text-base leading-relaxed text-white/75">
       Que alegria! A equipe de evangelismo da
-      <strong class="text-slate-800">{{ config.IGREJA_NOME }}</strong>
+      <strong class="font-semibold text-white">{{ config.IGREJA_NOME }}</strong>
       já foi avisada e vai entrar em contato em breve.
     </p>
 
     {# --- Versiculo, para fechar com o tom da casa --- #}
-    <div class="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p class="text-sm italic leading-relaxed text-slate-600">
-        "Haverá alegria no céu por um pecador que se arrepende."
-      </p>
-      <p class="mt-2 text-xs font-semibold uppercase tracking-wide text-marca/70">
-        Lucas 15:7
-      </p>
-    </div>
+    <figure class="mt-8 rounded-2xl border border-white/10 bg-white/[0.07] p-5 text-left">
+      <div class="flex gap-3">
+        <div class="w-1 shrink-0 rounded-full bg-chama"></div>
+        <div>
+          <blockquote class="text-[15px] italic leading-relaxed text-white/90">
+            “Haverá alegria no céu por um pecador que se arrepende.”
+          </blockquote>
+          <figcaption class="mt-2.5 text-xs font-semibold uppercase tracking-widest text-chama-claro">
+            Lucas 15:7
+          </figcaption>
+        </div>
+      </div>
+    </figure>
 
-    {# --- Voltar ao formulário para cadastrar outra pessoa ---
+    {# --- Cadastrar outra pessoa ---
          Este e o UNICO link da pagina, e leva de volta ao proprio formulario.
          Nao ha caminho daqui para o painel nem para o login.
 
@@ -55,22 +66,19 @@
          (Na tela de "muitas tentativas" o history.back() esta certo: la o
          cadastro NAO foi salvo e a pessoa precisa dos dados de volta.) --- #}
     {% if voltar %}
-      <p class="mt-8 text-sm text-slate-500">
-        Precisa cadastrar outra pessoa?
-        <a href="{{ voltar }}"
-           class="font-semibold text-marca underline decoration-marca/30 underline-offset-2 transition hover:decoration-marca">
-          Cadastrar outra pessoa
-        </a>
-      </p>
+      <a href="{{ voltar }}"
+         class="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-white/20 px-6 py-3.5 text-base font-semibold text-white transition hover:border-white/40 hover:bg-white/5 active:scale-[0.98]">
+        <span aria-hidden="true">＋</span> Cadastrar outra pessoa
+      </a>
     {% endif %}
-
-    {# --- Rodape com o contato de LGPD --- #}
-    <p class="mt-10 text-[11px] leading-relaxed text-slate-400">
-      <img src="{{ url_for('static', filename='img/logo-adba.png') }}"
-           alt="{{ config.IGREJA_NOME }}" class="mx-auto mb-3 h-8 w-auto opacity-60"><br>
-      {{ config.IGREJA_NOME_LEGAL }}<br>
-      Dúvidas sobre seus dados: {{ config.IGREJA_TELEFONE }}
-    </p>
   </div>
+
+  {# --- Rodape com o contato de LGPD --- #}
+  <p class="relative pb-8 text-center text-[11px] leading-relaxed text-white/35">
+    <img src="{{ url_for('static', filename='img/logo-adba-branco-pequeno.png') }}"
+         alt="{{ config.IGREJA_NOME }}" class="mx-auto mb-3 h-7 w-auto opacity-50">
+    {{ config.IGREJA_NOME_LEGAL }}<br>
+    Dúvidas sobre seus dados: {{ config.IGREJA_TELEFONE }}
+  </p>
 </div>
 {% endblock %}
